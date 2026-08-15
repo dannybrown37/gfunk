@@ -14,7 +14,7 @@ DEFAULT_CLIENT_SECRETS = DEFAULT_CONFIG_DIR / "credentials.json"
 DEFAULT_TOKEN_PATH = DEFAULT_CONFIG_DIR / "token.json"
 
 
-class MissingClientSecrets(Exception):
+class MissingClientSecretsError(Exception):
     """gfunk ships no credentials; the user registers their own GCP OAuth client."""
 
 
@@ -37,11 +37,12 @@ def mount_up(
         creds.refresh(Request())
     else:
         if not client_secrets.exists():
-            raise MissingClientSecrets(
+            message = (
                 f"No OAuth client secrets at {client_secrets}. Create a Desktop-app "
                 "OAuth client in your own Google Cloud project, download its JSON, and "
                 "save it there (or pass --client-secrets)."
             )
+            raise MissingClientSecretsError(message)
         flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets), scopes)
         creds = flow.run_local_server(port=0)
 

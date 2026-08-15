@@ -1,0 +1,53 @@
+version: 2
+
+updates:
+  # Runtime dependencies. Google's client libraries ship security fixes on
+  # their own cadence, so this is the update stream that actually matters.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine churn; anything major still arrives alone and
+      # gets read properly.
+      python-minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: 'fix'
+      prefix-development: 'chore'
+    # Wait a week before proposing a newly-published version. The supply-chain
+    # attack this blocks is a malicious release that gets auto-merged within
+    # minutes of publication; a week is long enough that a compromised version
+    # is usually yanked before Dependabot ever opens the PR. Dependabot's
+    # *security* updates are a separate stream and are not delayed by this.
+    cooldown:
+      default-days: 7
+
+  # A compromised or abandoned action runs with the workflow's token. Keep
+  # these current and pinned to a major.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: 'ci'
+    cooldown:
+      default-days: 7
+
+  # pre-commit hook revs are pinned by rev: and go stale silently otherwise.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      hooks:
+        patterns: ['*']
+    commit-message:
+      prefix: 'ci'
+    cooldown:
+      default-days: 7

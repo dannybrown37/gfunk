@@ -1,0 +1,63 @@
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
+  # Fail a bad commit message in ~0.3s rather than after the whole suite.
+  - repo: https://github.com/dannybrown37/git-a-grip
+    rev: v0.11.1
+    hooks:
+      - id: commitizen-early
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.17.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  # Anything below that reaches `git commit` is in a public repo forever.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: mixed-line-ending
+      # A stray credentials.json or token.json is gitignored, but -f defeats
+      # that; this refuses the file itself.
+      - id: forbid-new-submodules
+
+  # A workflow runs with a token; audit it like code.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.29.0
+    hooks:
+      - id: zizmor
+
+  - repo: https://github.com/dannybrown37/git-a-grip
+    rev: v0.11.1
+    hooks:
+      - id: ruff-check
+        args: [--config, .ruff.toml]
+      - id: ruff-format
+        args: [--config, .ruff.toml]
+      - id: mypy
+      - id: pytest
+        args: [tests/, -q]
+      # A secret scanner cannot find a real customer name or sheet ID. This
+      # can. Public repo + Workspace data makes it the load-bearing one.
+      - id: block-private-terms
+      - id: embed-tree

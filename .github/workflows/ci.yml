@@ -1,0 +1,97 @@
+# Lint, type-check, and test every push and PR.
+#
+# gfunk is public and holds a user's Workspace credentials at runtime, so the
+# security jobs are part of CI rather than a separate optional workflow.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege by default; a job that needs more asks for it itself.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: '3.14'
+          enable-cache: true
+
+      - run: uv sync
+
+      - name: Lint
+        run: uv run --with ruff ruff check --config .ruff.toml src tests
+
+      - name: Format
+        run: uv run --with ruff ruff format --check --config .ruff.toml src tests
+
+      - name: Type-check
+        run: uv run --with mypy mypy
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Build
+        run: uv build
+
+      # `--version` must answer on a bare wheel with no dev group, no config,
+      # and no credentials -- that is the state a bug reporter is in.
+      - name: --version works from the built wheel alone
+        run: |
+          cd "$(mktemp -d)"
+          uv run --isolated --no-project \
+            --with "$GITHUB_WORKSPACE"/dist/*.whl gfunk --version
+
+  hooks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # gitleaks needs history to scan; a shallow clone scans one commit.
+          fetch-depth: 0
+          # No job here pushes, so leaving the token in .git/config only
+          # widens what a compromised step could walk off with.
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: '3.14'
+          enable-cache: true
+
+      - run: uv sync
+
+      # The same suite the contributor's commit ran, so a bypassed local hook
+      # is caught here rather than in review.
+      - name: pre-commit
+        run: uv run --with pre-commit pre-commit run --all-files --show-diff-on-failure
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      # Read the code to analyze it, and write the results to the Security tab.
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        with:
+          languages: python
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4

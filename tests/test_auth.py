@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gfunk.auth import SCOPES, MissingClientSecrets, mount_up
+from gfunk.auth import SCOPES, MissingClientSecretsError, mount_up
 
 
 @pytest.fixture
@@ -14,7 +14,7 @@ def client_secrets(tmp_path: Path) -> Path:
     return path
 
 
-def fake_creds(valid: bool = True, expired: bool = False) -> MagicMock:
+def fake_creds(*, valid: bool = True, expired: bool = False) -> MagicMock:
     creds = MagicMock()
     creds.valid = valid
     creds.expired = expired
@@ -25,7 +25,7 @@ def fake_creds(valid: bool = True, expired: bool = False) -> MagicMock:
 
 def test_missing_client_secrets_names_the_expected_path(tmp_path: Path) -> None:
     missing = tmp_path / "credentials.json"
-    with pytest.raises(MissingClientSecrets) as exc:
+    with pytest.raises(MissingClientSecretsError) as exc:
         mount_up(client_secrets=missing, token_path=tmp_path / "token.json")
     assert str(missing) in str(exc.value)
 
@@ -53,12 +53,17 @@ def test_scopes_are_sheets_and_drive_read_only() -> None:
     ]
 
 
-def test_cached_valid_token_skips_the_browser(client_secrets: Path, tmp_path: Path) -> None:
+def test_cached_valid_token_skips_the_browser(
+    client_secrets: Path, tmp_path: Path
+) -> None:
     token_path = tmp_path / "token.json"
     token_path.write_text(json.dumps({"token": "cached"}))
 
     with (
-        patch("gfunk.auth.Credentials.from_authorized_user_file", return_value=fake_creds()),
+        patch(
+            "gfunk.auth.Credentials.from_authorized_user_file",
+            return_value=fake_creds(),
+        ),
         patch("gfunk.auth.InstalledAppFlow.from_client_secrets_file") as from_file,
     ):
         mount_up(client_secrets=client_secrets, token_path=token_path)

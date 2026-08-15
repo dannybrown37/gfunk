@@ -7,6 +7,7 @@ dependencies = [
     "google-api-python-client>=2.198.0",
     "google-auth-httplib2>=0.4.1",
     "google-auth-oauthlib>=1.4.0",
+    "mcp>=2.0.0",
 ]
 
 [project.scripts]
@@ -24,3 +25,22 @@ dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "v$version"
+update_changelog_on_bump = true
+
+[tool.mypy]
+files = ["src", "tests"]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+# google-auth ships py.typed but leaves its own internals untyped; that is a
+# gap in the dependency, not a call we can annotate our way out of.
+untyped_calls_exclude = ["google.oauth2", "google.auth"]
+
+[[tool.mypy.overrides]]
+module = ["googleapiclient.*", "google_auth_oauthlib.*"]
+ignore_missing_imports = true

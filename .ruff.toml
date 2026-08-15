@@ -1,0 +1,77 @@
+line-length = 88
+show-fixes = true
+target-version = "py314"
+
+[lint]
+select = [
+  "A",
+  "ANN",
+  "ARG",
+  "ASYNC",
+  "B",
+  "BLE",
+  "C4",
+  "C90",
+  "COM",
+  "D200",
+  "D201",
+  "D202",
+  "D205",
+  "D212",
+  "E",
+  "EM",
+  "ERA",
+  "EXE",
+  "F",
+  "FBT",
+  "G",
+  "I",
+  "ICN",
+  "ISC",
+  "N",
+  "PGH",
+  "PIE",
+  "PL",
+  "PT",
+  "PTH",
+  "PYI",
+  "Q",
+  "RET",
+  "RSE",
+  "RUF",
+  "S",
+  "SIM",
+  "SLF",
+  "T20",
+  "TCH",
+  "TID",
+  "TRY",
+  "UP",
+  "W",
+  "YTT",
+]
+ignore = [
+  "COM812",
+  "I001",
+  "ISC001",
+  "PLC0415",
+  "PLR0913",
+  "S101",
+  # Python 3.14 evaluates annotations lazily (PEP 649), so hiding imports in a
+  # TYPE_CHECKING block buys nothing and costs readability.
+  "TC001",
+  "TC002",
+  "TC003",
+  "TRY003",
+]
+
+[lint.per-file-ignores]
+# The CLI is the one place printing to stdout is the product.
+"src/gfunk/cli.py" = ["T20", "ANN401"]
+# ANN401: JSON payloads and googleapiclient's `build()` results are genuinely
+# untyped; narrowing them would be a lie rather than a type.
+"src/gfunk/cache.py" = ["ANN401"]
+"src/gfunk/workspace.py" = ["ANN401"]
+"src/gfunk/mothership.py" = ["ANN401"]
+# PLR2004/EM101: a literal in an assertion is the assertion.
+"tests/*" = ["SLF001", "S105", "S106", "PLR2004", "EM101"]
