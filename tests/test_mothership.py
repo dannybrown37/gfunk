@@ -34,7 +34,13 @@ def test_every_tool_is_namespaced(workspace: Workspace) -> None:
 
 
 @pytest.mark.parametrize(
-    "verb", [f"{TOOL_PREFIX}snoop", f"{TOOL_PREFIX}sample", f"{TOOL_PREFIX}mix"]
+    "verb",
+    [
+        f"{TOOL_PREFIX}snoop",
+        f"{TOOL_PREFIX}sample",
+        f"{TOOL_PREFIX}regulate",
+        f"{TOOL_PREFIX}dig",
+    ],
 )
 def test_the_expected_verbs_are_registered(workspace: Workspace, verb: str) -> None:
     server = build_server(lambda: workspace)

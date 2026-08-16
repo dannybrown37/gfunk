@@ -8,6 +8,7 @@ dependencies = [
     "google-auth-httplib2>=0.4.1",
     "google-auth-oauthlib>=1.4.0",
     "mcp>=2.0.0",
+    "tabulate>=0.10.0",
 ]
 
 [project.scripts]
@@ -21,7 +22,10 @@ build-backend = "hatchling.build"
 packages = ["src/gfunk"]
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "types-tabulate>=0.10.0.20260508",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

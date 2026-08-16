@@ -71,16 +71,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     snoop.add_argument("--limit", type=int, default=200)
 
-    sample = sub.add_parser("sample", help="Pull rows from a spreadsheet range")
+    # "pull" is the word a new user types blind; "sample" is the one we mean.
+    sample = sub.add_parser(
+        "sample", aliases=["pull"], help="Pull rows from a spreadsheet range"
+    )
     sample.add_argument("spreadsheet_id", nargs="?")
     sample.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
     sample.add_argument("--limit", type=int, default=None)
-
-    mix = sub.add_parser("mix", help="Join Drive files onto sheet rows")
-    mix.add_argument("spreadsheet_id", nargs="?")
-    mix.add_argument("cell_range", nargs="?")
-    mix.add_argument("--key", help="Column whose value is matched against Drive")
-    mix.add_argument("--limit", type=int, default=None)
+    sample.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of a table"
+    )
 
     dig = sub.add_parser(
         "dig",
@@ -94,6 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         help="How many rows from the bottom to show (sheets only)",
     )
+    dig.add_argument("--json", action="store_true", help="Emit JSON instead of a table")
 
     regulate = sub.add_parser(
         "regulate",
@@ -130,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sheet tab name (defaults to first tab)",
     )
 
-    sub.add_parser("mothership", help="Start the MCP server on stdio")
+    sub.add_parser("mothership", aliases=["mcp"], help="Start the MCP server on stdio")
     return parser
 
 
@@ -153,6 +154,17 @@ def prompt_required(text: str, flag: str) -> str:
 
 def emit(payload: Any, replay: str) -> int:
     print(json.dumps(payload, indent=2))
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    return 0
+
+
+def emit_table(rows: list[dict[str, str]], replay: str) -> int:
+    from tabulate import tabulate
+
+    if not rows:
+        print("(no rows)")
+    else:
+        print(tabulate(rows, headers="keys", tablefmt="simple"))
     print(f"\nRun again with:\n  {replay}", file=sys.stderr)
     return 0
 
@@ -512,10 +524,10 @@ def cmd_dig(args: argparse.Namespace) -> int:
         with status(f"Reading {name} / {tab}"):
             rows = workspace.sample(file_id, tab)
         tail = rows[-args.rows :] if len(rows) > args.rows else rows
-        return emit(
-            tail,
-            f"gfunk dig {quote(file_id)} --rows {args.rows}",
-        )
+        replay = f"gfunk dig {quote(file_id)} --rows {args.rows}"
+        if args.json:
+            return emit(tail, replay + " --json")
+        return emit_table(tail, replay)
 
     open_in_browser(file_meta)
     print(f"Opened {name} in your browser.", file=sys.stderr)
@@ -571,57 +583,10 @@ def cmd_sample(args: argparse.Namespace) -> int:
 
     with status("Pulling rows"):
         rows = workspace.sample(sheet, cell_range, limit=args.limit)
-    return emit(rows, f"gfunk sample {quote(sheet)} {quote(cell_range)}")
-
-
-def pick_column(workspace: Any, spreadsheet_id: str, cell_range: str) -> str | None:
-    """fzf over column headers for --key selection."""
-    if not can_browse():
-        return None
-    with status("Reading column headers"):
-        rows = workspace.sample(spreadsheet_id, cell_range, limit=1)
-    if not rows:
-        return None
-    columns = list(rows[0].keys())
-    if not columns:
-        return None
-    return fzf_pick(columns, "Pick a column to join on", abort_ok=True)
-
-
-def cmd_mix(args: argparse.Namespace) -> int:
-    from gfunk.workspace import Workspace
-
-    with status("Signing in to Google"):
-        workspace = Workspace.connect()
-
-    sheet = args.spreadsheet_id
-    if not sheet:
-        sheet = pick_spreadsheet(workspace)
-    if not sheet:
-        sheet = prompt_required("Spreadsheet id: ", "a spreadsheet id")
-
-    cell_range = args.cell_range
-    if not cell_range:
-        cell_range = pick_range(workspace, sheet)
-    if not cell_range:
-        cell_range = prompt_required("Range (e.g. A1:D50): ", "a range")
-
-    key = args.key
-    if not key:
-        key = pick_column(workspace, sheet, cell_range)
-    if not key:
-        key = prompt_required("Column to match on: ", "--key")
-
-    try:
-        with status("Joining Drive files onto rows"):
-            mixed = workspace.mix(sheet, cell_range, key, limit=args.limit)
-    except KeyError as exc:
-        print(exc.args[0], file=sys.stderr)
-        return 1
-    return emit(
-        mixed,
-        f"gfunk mix {quote(sheet)} {quote(cell_range)} --key {quote(key)}",
-    )
+    replay = f"gfunk sample {quote(sheet)} {quote(cell_range)}"
+    if args.json:
+        return emit(rows, replay + " --json")
+    return emit_table(rows, replay)
 
 
 def _default_format(mime: str) -> str:
@@ -713,6 +678,20 @@ def cmd_bounce(args: argparse.Namespace) -> int:
 def cmd_mothership(_: argparse.Namespace) -> int:
     from gfunk.mothership import run
 
+    if sys.stdin.isatty():
+        print(
+            "mothership is an MCP server — it speaks JSON-RPC over stdio,\n"
+            "not meant to be run directly in a terminal.\n"
+            "\n"
+            "Configure it as an MCP server in your client:\n"
+            '  { "command": "uv", "args": ["run", "--project", '
+            '"/path/to/gfunk", "gfunk", "mothership"] }\n'
+            "\n"
+            "Or pipe JSON-RPC to it:\n"
+            "  echo '{}' | gfunk mothership",
+            file=sys.stderr,
+        )
+        return 1
     run()
     return 0
 
@@ -832,12 +811,13 @@ COMMANDS = {
     "dig": cmd_dig,
     "open": cmd_dig,
     "sample": cmd_sample,
-    "mix": cmd_mix,
+    "pull": cmd_sample,
     "bounce": cmd_bounce,
     "export": cmd_bounce,
     "regulate": cmd_regulate,
     "audit": cmd_regulate,
     "mothership": cmd_mothership,
+    "mcp": cmd_mothership,
 }
 
 

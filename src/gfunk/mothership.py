@@ -51,16 +51,6 @@ def build_server(
         """Pull rows from a spreadsheet range as records."""
         return connect().sample(spreadsheet_id, cell_range, limit=limit)
 
-    @server.tool(name=f"{TOOL_PREFIX}mix")
-    def mix(
-        spreadsheet_id: str,
-        cell_range: str,
-        key: str,
-        limit: int | None = None,
-    ) -> list[dict[str, Any]]:
-        """Join matching Drive files onto each row of a sheet range."""
-        return connect().mix(spreadsheet_id, cell_range, key, limit=limit)
-
     @server.tool(name=f"{TOOL_PREFIX}regulate")
     def regulate(limit: int = 200, *, shared_only: bool = True) -> list[dict[str, Any]]:
         """Audit who can reach the Drive files you own, ranked by exposure."""

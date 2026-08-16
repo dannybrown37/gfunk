@@ -7,7 +7,12 @@ from gfunk.cli import cmd_sample, pick_spreadsheet, pick_range
 
 
 def sample_args(**overrides: object) -> argparse.Namespace:
-    defaults = {"spreadsheet_id": None, "cell_range": None, "limit": None}
+    defaults: dict[str, object] = {
+        "spreadsheet_id": None,
+        "cell_range": None,
+        "limit": None,
+        "json": False,
+    }
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -24,6 +29,19 @@ def test_sample_with_args_skips_pickers(
         assert cmd_sample(sample_args(spreadsheet_id="s1", cell_range="Sheet1")) == 0
 
     workspace.sample.assert_called_once_with("s1", "Sheet1", limit=None)
+    assert "A" in capsys.readouterr().out
+
+
+def test_sample_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    workspace = MagicMock()
+    workspace.sample.return_value = [{"A": "1"}]
+
+    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
+        assert (
+            cmd_sample(sample_args(spreadsheet_id="s1", cell_range="Sheet1", json=True))
+            == 0
+        )
+
     assert '"A": "1"' in capsys.readouterr().out
 
 

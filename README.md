@@ -48,8 +48,9 @@ Already have a token? Everything else just works:
 ```bash
 gfunk get-down                              # sign in (OAuth), on its own
 gfunk snoop "Q3 report"                     # search Drive
-gfunk sample <sheet-id> 'Sheet1!A1:D50'     # pull rows as records
-gfunk mix <sheet-id> 'Sheet1!A1:D50' --key Name   # join Drive files onto rows
+gfunk sample <sheet-id> 'Sheet1!A1:D50'     # pull rows as a table
+gfunk dig <file-id>                         # open a Doc, or tail a spreadsheet
+gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk mothership                            # start the MCP server on stdio
 ```
 
@@ -69,7 +70,7 @@ gfunk names the missing flag and exits rather than hanging a CI job.
 }
 ```
 
-Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__mix`, `gfunk__regulate`, `gfunk__dig`. **stdio only** — an HTTP
+Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__regulate`, `gfunk__dig`. **stdio only** — an HTTP
 listener holding live Workspace credentials is attack surface this project doesn't need yet.
 
 ### The local cache
@@ -90,8 +91,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 |---|---|
 | `gfunk snoop` | Browse Drive folders like directories |
 | `gfunk dig` | Open a Doc in your browser, or show the tail of a spreadsheet |
-| `gfunk sample` | Pull a subset of records for analysis |
-| `gfunk mix` | Join Drive files onto sheet rows by column |
+| `gfunk sample` | Pull rows from a spreadsheet as a table |
 | `gfunk bounce` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `gfunk hook` | Webhooks / event triggers |
 | `gfunk loop` | Scheduled and recurring jobs |
@@ -100,7 +100,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `gfunk get-down` | Sign in — the OAuth flow itself |
 | `gfunk mothership` | Start the MCP server |
 
-`mount-up`, `get-down`, `snoop`, `dig`, `sample`, `mix`, `bounce`, `regulate` and `mothership` are implemented.
+`mount-up`, `get-down`, `snoop`, `dig`, `sample`, `bounce`, `regulate` and `mothership` are implemented.
 `hook` and `loop` are the planned surface.
 
 ## Development

@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
 
 from conftest import build_drive, build_sheets
 
@@ -69,27 +68,6 @@ def test_sample_limit_applies_to_data_rows(cache: Cache) -> None:
     ws = Workspace(drive=MagicMock(), sheets=sheets, cache=cache)
 
     assert len(ws.sample("sheet-id", "A1:A11", limit=2)) == 2
-
-
-def test_mix_joins_drive_files_onto_sheet_rows(cache: Cache) -> None:
-    # The integrations verb: a column of names, matched against Drive.
-    drive = build_drive([{"files": [{"id": "d1", "name": "Ada onboarding"}]}])
-    sheets = build_sheets([["Name"], ["Ada"]])
-    ws = Workspace(drive=drive, sheets=sheets, cache=cache)
-
-    mixed = ws.mix("sheet-id", "A1:A2", key="Name")
-
-    assert mixed == [
-        {"Name": "Ada", "drive_matches": [{"id": "d1", "name": "Ada onboarding"}]}
-    ]
-
-
-def test_mix_raises_on_an_unknown_key_column(cache: Cache) -> None:
-    sheets = build_sheets([["Name"], ["Ada"]])
-    ws = Workspace(drive=MagicMock(), sheets=sheets, cache=cache)
-
-    with pytest.raises(KeyError):
-        ws.mix("sheet-id", "A1:A2", key="Nope")
 
 
 def test_recent_asks_drive_for_the_newest_files_first() -> None:

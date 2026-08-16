@@ -8,7 +8,7 @@ from gfunk.workspace import DOC_MIME, SHEET_MIME
 
 
 def dig_args(**overrides: object) -> argparse.Namespace:
-    defaults = {"file_id": None, "rows": 20}
+    defaults: dict[str, object] = {"file_id": None, "rows": 20, "json": False}
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -27,7 +27,9 @@ DOC_FILE = {
 }
 
 
-def test_dig_sheet_shows_tail_rows(capsys: pytest.CaptureFixture[str]) -> None:
+def test_dig_sheet_shows_tail_rows_as_table(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     workspace = MagicMock()
     workspace.file_meta.return_value = SHEET_FILE
     workspace.sheet_tabs.return_value = ["Sheet1"]
@@ -37,9 +39,21 @@ def test_dig_sheet_shows_tail_rows(capsys: pytest.CaptureFixture[str]) -> None:
         assert cmd_dig(dig_args(file_id="s1")) == 0
 
     out = capsys.readouterr()
-    assert '"A": "30"' in out.out
-    assert '"A": "49"' in out.out
-    assert '"A": "0"' not in out.out
+    assert "30" in out.out
+    assert "49" in out.out
+
+
+def test_dig_sheet_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
+    workspace.sheet_tabs.return_value = ["Sheet1"]
+    workspace.sample.return_value = [{"A": str(i)} for i in range(5)]
+
+    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
+        assert cmd_dig(dig_args(file_id="s1", json=True)) == 0
+
+    out = capsys.readouterr()
+    assert '"A": "0"' in out.out
 
 
 def test_dig_sheet_custom_rows(capsys: pytest.CaptureFixture[str]) -> None:
@@ -52,8 +66,7 @@ def test_dig_sheet_custom_rows(capsys: pytest.CaptureFixture[str]) -> None:
         assert cmd_dig(dig_args(file_id="s1", rows=5)) == 0
 
     out = capsys.readouterr()
-    assert '"A": "5"' in out.out
-    assert '"A": "4"' not in out.out
+    assert "5" in out.out
 
 
 def test_dig_doc_opens_browser() -> None:

@@ -57,9 +57,7 @@ def test_bounce_sheet_json_uses_sheets_api(
     assert '"Name": "Alice"' in out
 
 
-def test_bounce_doc_txt_exports_via_drive(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_bounce_doc_txt_exports_via_drive() -> None:
     workspace = MagicMock()
     workspace.file_meta.return_value = DOC_FILE
     workspace.export.return_value = b"Hello world"

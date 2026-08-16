@@ -195,26 +195,6 @@ class Workspace:
         )
         return rows
 
-    def mix(
-        self,
-        spreadsheet_id: str,
-        cell_range: str,
-        key: str,
-        limit: int | None = None,
-    ) -> list[dict[str, Any]]:
-        """Join Drive files onto each sheet row, matched on the `key` column."""
-        rows = self.sample(spreadsheet_id, cell_range, limit=limit)
-
-        mixed: list[dict[str, Any]] = []
-        for row in rows:
-            if key not in row:
-                message = (
-                    f"No column {key!r} in {sorted(row)}. Pass --key with one of those."
-                )
-                raise KeyError(message)
-            mixed.append({**row, "drive_matches": self.snoop(row[key])})
-        return mixed
-
     def spreadsheets(self, limit: int = 50) -> list[dict[str, Any]]:
         """Recent spreadsheets, for interactive pickers."""
         query = f"mimeType = '{SHEET_MIME}' and trashed = false"
