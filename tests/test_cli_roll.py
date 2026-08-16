@@ -1,5 +1,5 @@
 import argparse
-from typing import Any
+from collections.abc import Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,7 +16,7 @@ def snoop_args(**overrides: object) -> argparse.Namespace:
     return argparse.Namespace(**{**defaults, **overrides})
 
 
-def label_for(items: list[dict[str, Any]], name_prefix: str) -> str:
+def label_for(items: list[dict[str, object]], name_prefix: str) -> str:
     """Find the snoop_entries key that starts with `name_prefix`."""
     entries = snoop_entries(items, up=False)
     return next(k for k in entries if k.startswith(name_prefix))
@@ -25,8 +25,8 @@ def label_for(items: list[dict[str, Any]], name_prefix: str) -> str:
 def test_folders_are_marked_with_a_trailing_slash_like_a_directory() -> None:
     entries = snoop_entries([FOLDER, FILE], up=False)
     labels = list(entries)
-    folder_label = next(l for l in labels if l.startswith("Reports/"))
-    file_label = next(l for l in labels if l.startswith("Budget"))
+    folder_label = next(lbl for lbl in labels if lbl.startswith("Reports/"))
+    file_label = next(lbl for lbl in labels if lbl.startswith("Budget"))
     assert folder_label.startswith("Reports/")
     assert not file_label.startswith("Budget/")
 
@@ -36,14 +36,15 @@ def test_the_parent_entry_leads_the_listing_only_below_the_root() -> None:
     assert "../" not in snoop_entries([FILE], up=False)
 
 
-def _pick_by_name(name_prefix: str) -> Any:
-    """Return a fzf_pick side_effect that selects the entry starting with name_prefix."""
+def _pick_by_name(
+    name_prefix: str,
+) -> Callable[[list[object], str], str | None]:
+    """Return a fzf_pick side_effect that picks the entry matching name_prefix."""
 
-    def picker(candidates: Any, *args: Any, **kwargs: Any) -> str | None:
-        if isinstance(candidates, list):
-            for c in candidates:
-                if str(c).startswith(name_prefix):
-                    return str(c)
+    def picker(candidates: list[object], _header: str, **_kw: bool) -> str | None:
+        for c in candidates:
+            if str(c).startswith(name_prefix):
+                return str(c)
         return None
 
     return picker
@@ -55,7 +56,9 @@ def test_picking_a_folder_descends_and_lists_it() -> None:
 
     call_count = 0
 
-    def pick_then_none(candidates: Any, *args: Any, **kwargs: Any) -> str | None:
+    def pick_then_none(
+        candidates: list[object], _header: str, **_kw: bool
+    ) -> str | None:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -116,7 +119,9 @@ def test_escape_below_the_root_climbs_back_up_a_level() -> None:
 
     call_count = 0
 
-    def pick_then_none(candidates: Any, *args: Any, **kwargs: Any) -> str | None:
+    def pick_then_none(
+        candidates: list[object], _header: str, **_kw: bool
+    ) -> str | None:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -146,7 +151,7 @@ def test_the_parent_entry_climbs_the_same_way_escape_does() -> None:
     call_count = 0
 
     def pick_folder_then_up_then_none(
-        candidates: Any, *args: Any, **kwargs: Any
+        candidates: list[object], _header: str, **_kw: bool
     ) -> str | None:
         nonlocal call_count
         call_count += 1
@@ -186,9 +191,9 @@ def test_without_fzf_it_prints_the_folder_as_json_instead_of_hanging(
 def test_the_header_shows_the_path_walked_so_far() -> None:
     workspace = MagicMock()
     workspace.children.side_effect = [[FOLDER], [FILE], [FOLDER]]
-    headers: list[Any] = []
+    headers: list[str] = []
 
-    def record(candidates: Any, header: str, **_: Any) -> str | None:
+    def record(candidates: list[object], header: str, **_kw: bool) -> str | None:
         headers.append(header)
         if len(headers) == 1:
             for c in candidates:
