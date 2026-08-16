@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from gfunk import auth
 from gfunk.auth import SCOPES, MissingClientSecretsError, get_down
 
 
@@ -87,3 +89,37 @@ def test_expired_token_refreshes_instead_of_reauthorizing(
     creds.refresh.assert_called_once()
     from_file.assert_not_called()
     assert json.loads(token_path.read_text()) == {"token": "cached"}
+
+
+@pytest.mark.parametrize(
+    ("expected", "refresh_token", "valid", "expired"),
+    [
+        ("signed-in", "r", True, False),
+        ("refreshable", "r", False, True),
+        ("stale", None, False, True),
+    ],
+)
+def test_token_state_names_what_the_cached_token_can_still_do(
+    tmp_path: Path,
+    expected: str,
+    refresh_token: str | None,
+    *,
+    valid: bool,
+    expired: bool,
+) -> None:
+    token = tmp_path / "token.json"
+    token.write_text("{}")
+    creds = SimpleNamespace(valid=valid, expired=expired, refresh_token=refresh_token)
+
+    with patch("gfunk.auth.Credentials.from_authorized_user_file", return_value=creds):
+        assert auth.token_state(token) == expected
+
+
+def test_token_state_is_none_without_a_token_file(tmp_path: Path) -> None:
+    assert auth.token_state(tmp_path / "missing.json") == "none"
+
+
+def test_token_state_treats_an_unreadable_token_as_stale(tmp_path: Path) -> None:
+    token = tmp_path / "token.json"
+    token.write_text("not json")
+    assert auth.token_state(token) == "stale"

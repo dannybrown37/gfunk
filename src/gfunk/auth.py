@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -16,6 +17,27 @@ SCOPES = [
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "gfunk"
 DEFAULT_CLIENT_SECRETS = DEFAULT_CONFIG_DIR / "credentials.json"
 DEFAULT_TOKEN_PATH = DEFAULT_CONFIG_DIR / "token.json"
+
+
+TokenState = Literal["none", "signed-in", "refreshable", "stale"]
+
+
+def token_state(
+    token_path: Path = DEFAULT_TOKEN_PATH, scopes: list[str] | None = None
+) -> TokenState:
+    """What the cached token is still good for, without touching the network."""
+    if not token_path.exists():
+        return "none"
+    try:
+        creds = Credentials.from_authorized_user_file(
+            str(token_path), scopes if scopes is not None else SCOPES
+        )
+    except ValueError, OSError:
+        return "stale"
+
+    if creds.valid:
+        return "signed-in"
+    return "refreshable" if creds.expired and creds.refresh_token else "stale"
 
 
 def authorize_prompt() -> str:

@@ -36,7 +36,15 @@ def test_mount_up_installs_a_named_file_without_prompting(
 
     with patch("sys.stdin.isatty", return_value=False):
         code = main_code(
-            ["setup", "--client-secrets", str(source), "--dest", str(dest)]
+            [
+                "setup",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
         )
 
     assert code == 0
@@ -53,7 +61,15 @@ def test_mount_up_rejects_a_service_account_key_with_a_useful_message(
 
     with patch("sys.stdin.isatty", return_value=False):
         code = main_code(
-            ["setup", "--client-secrets", str(source), "--dest", str(dest)]
+            [
+                "setup",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
         )
 
     assert code == 1
@@ -73,7 +89,9 @@ def test_mount_up_picks_the_newest_download_when_confirmed(
         patch("gfunk.bootstrap.default_download_dirs", return_value=[tmp_path]),
         patch("gfunk.cli.fzf_pick", return_value=None),
     ):
-        code = main_code(["mount-up", "--dest", str(dest)])
+        code = main_code(
+            ["mount-up", "--dest", str(dest), "--token", str(tmp_path / "token.json")]
+        )
 
     assert code == 0
     assert dest.exists()
@@ -93,7 +111,15 @@ def test_mount_up_offers_to_sign_in_and_runs_get_down(tmp_path: Path) -> None:
         patch("gfunk.cli.cmd_get_down", return_value=0) as signed_in,
     ):
         code = main_code(
-            ["mount-up", "--client-secrets", str(source), "--dest", str(dest)]
+            [
+                "mount-up",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
         )
 
     assert code == 0
@@ -112,7 +138,15 @@ def test_mount_up_declining_sign_in_leaves_the_next_command(
         patch("gfunk.cli.cmd_get_down") as signed_in,
     ):
         code = main_code(
-            ["mount-up", "--client-secrets", str(source), "--dest", str(dest)]
+            [
+                "mount-up",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
         )
 
     signed_in.assert_not_called()
@@ -126,7 +160,15 @@ def test_setup_is_an_alias_for_mount_up(tmp_path: Path) -> None:
 
     with patch("sys.stdin.isatty", return_value=False):
         code = main_code(
-            ["setup", "--client-secrets", str(source), "--dest", str(dest)]
+            [
+                "setup",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
         )
 
     assert code == 0
@@ -144,12 +186,55 @@ def test_mount_up_reports_an_already_installed_client_instead_of_the_walkthrough
         patch("sys.stdin.isatty", return_value=True),
         patch("gfunk.cli.input", return_value="n", create=True),
     ):
-        code = main_code(["mount-up", "--dest", str(dest)])
+        code = main_code(
+            ["mount-up", "--dest", str(dest), "--token", str(tmp_path / "token.json")]
+        )
 
     out = capsys.readouterr().out
     assert code == 0
     assert str(dest) in out
     assert "Desktop app" not in out, "already set up; don't re-run the walkthrough"
+
+
+def test_mount_up_says_nothing_to_do_when_already_signed_in(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+    token = tmp_path / "config" / "token.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", create=True) as asked,
+        patch("gfunk.auth.token_state", return_value="signed-in"),
+    ):
+        code = main_code(["mount-up", "--dest", str(dest), "--token", str(token)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    asked.assert_not_called(), "already signed in; there is nothing to ask"
+    assert "Already signed in" in out
+    assert "gfunk snoop" in out, "point at the next useful command instead"
+
+
+def test_mount_up_still_offers_sign_in_when_the_token_is_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="n", create=True) as asked,
+        patch("gfunk.auth.token_state", return_value="stale"),
+    ):
+        code = main_code(["mount-up", "--dest", str(dest)])
+
+    assert code == 0
+    asked.assert_called_once()
+    assert "gfunk get-down" in capsys.readouterr().out
 
 
 def test_mount_up_reinstall_forces_the_walkthrough(
@@ -214,3 +299,47 @@ def main_code(argv: list[str]) -> int:
         main(argv)
     assert isinstance(exc.value.code, int)
     return exc.value.code
+
+
+@pytest.mark.parametrize(
+    ("alias", "canonical"),
+    [("setup", "mount-up"), ("login", "get-down"), ("search", "snoop")],
+)
+def test_the_word_a_new_user_types_blind_reaches_the_real_command(
+    alias: str, canonical: str
+) -> None:
+    from gfunk.cli import COMMANDS, build_parser
+
+    assert COMMANDS[alias] is COMMANDS[canonical]
+    assert build_parser().parse_args([alias]).command == alias
+
+
+def test_steps_prints_the_walkthrough_even_when_already_set_up(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(json.dumps({"installed": {"project_id": "gfunk-505623"}}))
+
+    code = main_code(["mount-up", "--steps", "--dest", str(dest)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Drive API" in out
+    assert "project=gfunk-505623" in out, "the client JSON names its own project"
+
+
+def test_already_installed_points_at_the_steps_flag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(
+            ["mount-up", "--dest", str(dest), "--token", str(tmp_path / "t.json")]
+        )
+
+    assert code == 0
+    assert "gfunk mount-up --steps" in capsys.readouterr().out

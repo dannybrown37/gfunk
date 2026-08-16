@@ -1,8 +1,10 @@
 import argparse
+import json
 import subprocess
 import sys
 from importlib.metadata import version
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -68,3 +70,352 @@ def test_every_verb_has_a_handler() -> None:
     parser = build_parser()
     actions = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
     assert set(actions[0].choices) == set(COMMANDS)
+
+
+def test_snoop_browse_opens_the_chosen_files_web_link() -> None:
+    from gfunk.cli import browse
+
+    found = [
+        {"id": "a", "name": "Budget 2026", "webViewLink": "https://docs.google.com/a"},
+        {"id": "b", "name": "Other", "webViewLink": "https://docs.google.com/b"},
+    ]
+
+    with (
+        patch("gfunk.cli.fzf_pick", return_value="Other\tb"),
+        patch("webbrowser.open", return_value=True) as opened,
+    ):
+        browse(found)
+
+    opened.assert_called_once_with("https://docs.google.com/b")
+
+
+def test_snoop_browse_does_nothing_when_the_picker_is_escaped() -> None:
+    from gfunk.cli import browse
+
+    with (
+        patch("gfunk.cli.fzf_pick", return_value=None),
+        patch("webbrowser.open") as opened,
+    ):
+        browse([{"id": "a", "name": "Budget", "webViewLink": "https://x"}])
+
+    opened.assert_not_called()
+
+
+def test_snoop_browse_prints_the_link_when_no_browser_opens(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import browse
+
+    with (
+        patch("gfunk.cli.fzf_pick", return_value="Budget\ta"),
+        patch("webbrowser.open", return_value=False),
+    ):
+        browse([{"id": "a", "name": "Budget", "webViewLink": "https://x"}])
+
+    assert "https://x" in capsys.readouterr().err
+
+
+def test_an_empty_answer_asks_again_instead_of_querying_for_nothing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import prompt_required
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", side_effect=["", "   ", "budget"], create=True),
+    ):
+        assert prompt_required("Search Drive for: ", "a search term") == "budget"
+
+    assert capsys.readouterr().err.count("Nothing entered") == 2
+
+
+def snoop_args(**overrides: object) -> argparse.Namespace:
+    defaults = {"term": None, "limit": 50, "browse": None}
+    return argparse.Namespace(**{**defaults, **overrides})
+
+
+def test_snoop_without_a_term_browses_recent_files_instead_of_asking(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import cmd_snoop
+
+    newest = {"id": "a", "name": "Budget 2026", "webViewLink": "https://x/a"}
+    workspace = MagicMock()
+    workspace.recent.return_value = [newest]
+
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.can_browse", return_value=True),
+        patch("gfunk.cli.browse", return_value=newest) as browsed,
+        patch("gfunk.cli.prompt_required") as asked,
+    ):
+        code = cmd_snoop(snoop_args())
+
+    assert code == 0
+    asked.assert_not_called(), "browsing is the point; do not demand a term first"
+    workspace.snoop.assert_not_called()
+    browsed.assert_called_once_with([newest])
+    out = capsys.readouterr()
+    assert "Budget 2026" in out.out, "the picked file is the output"
+    assert "gfunk snoop 'Budget 2026'" in out.err, "echo the replayable command"
+
+
+def test_snoop_without_a_term_falls_back_to_asking_when_it_cannot_browse() -> None:
+    from gfunk.cli import cmd_snoop
+
+    workspace = MagicMock()
+    workspace.snoop.return_value = []
+
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.can_browse", return_value=False),
+        patch("gfunk.cli.prompt_required", return_value="budget") as asked,
+    ):
+        cmd_snoop(snoop_args())
+
+    asked.assert_called_once()
+    workspace.snoop.assert_called_once_with("budget", limit=50)
+
+
+def test_snoop_resolves_the_term_before_authenticating() -> None:
+    """A missing argument should not cost a login round trip."""
+    from gfunk.cli import cmd_snoop
+
+    order: list[str] = []
+    workspace = MagicMock()
+    workspace.snoop.return_value = []
+
+    def asked(*_: object) -> str:
+        order.append("asked")
+        return "budget"
+
+    def connected(*_: object, **__: object) -> MagicMock:
+        order.append("connected")
+        return workspace
+
+    with (
+        patch("gfunk.cli.can_browse", return_value=False),
+        patch("gfunk.cli.prompt_required", side_effect=asked),
+        patch("gfunk.workspace.Workspace.connect", side_effect=connected),
+    ):
+        cmd_snoop(snoop_args())
+
+    assert order == ["asked", "connected"]
+
+
+@pytest.mark.parametrize("tty", [True, False])
+def test_status_only_writes_to_a_terminal(
+    *, tty: bool, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from gfunk.cli import status
+
+    with (
+        patch("sys.stderr.isatty", return_value=tty),
+        status("Fetching your newest Drive files"),
+    ):
+        pass
+
+    err = capsys.readouterr().err
+    assert ("Fetching your newest Drive files" in err) is tty
+    assert "\n" not in err, "the status line is transient, not scrollback"
+
+
+def test_snoop_browsing_announces_the_fetch_before_the_picker_appears(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Silent network work reads as a hang; say what is happening first."""
+    from gfunk.cli import cmd_snoop
+
+    newest = {"id": "a", "name": "Budget 2026", "webViewLink": "https://x/a"}
+    workspace = MagicMock()
+    said: list[str] = []
+
+    def recent(**_: object) -> list[dict[str, str]]:
+        said.append(capsys.readouterr().err)
+        return [newest]
+
+    workspace.recent.side_effect = recent
+
+    with (
+        patch("sys.stderr.isatty", return_value=True),
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.can_browse", return_value=True),
+        patch("gfunk.cli.browse", return_value=newest),
+    ):
+        cmd_snoop(snoop_args())
+
+    assert "newest" in said[0].lower(), said
+
+
+def test_snoop_browsing_announces_the_sign_in_before_it_blocks(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import cmd_snoop
+
+    workspace = MagicMock()
+    workspace.recent.return_value = []
+    seen: list[str] = []
+
+    def connect(*_: object, **__: object) -> MagicMock:
+        seen.append(capsys.readouterr().err)
+        return workspace
+
+    with (
+        patch("sys.stderr.isatty", return_value=True),
+        patch("gfunk.workspace.Workspace.connect", side_effect=connect),
+        patch("gfunk.cli.can_browse", return_value=True),
+    ):
+        cmd_snoop(snoop_args())
+
+    assert "sign" in seen[0].lower() or "connect" in seen[0].lower(), seen
+
+
+def test_snoop_with_a_term_announces_the_search(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import cmd_snoop
+
+    workspace = MagicMock()
+    said: list[str] = []
+
+    def snoop(_term: str, **_kwargs: object) -> list[dict[str, str]]:
+        said.append(capsys.readouterr().err)
+        return []
+
+    workspace.snoop.side_effect = snoop
+
+    with (
+        patch("sys.stderr.isatty", return_value=True),
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.can_browse", return_value=False),
+    ):
+        cmd_snoop(snoop_args(term="budget"))
+
+    assert "budget" in said[0], said
+
+
+def test_fzf_ui_is_not_captured_away_from_the_terminal() -> None:
+    """fzf draws on stderr; capturing it leaves an invisible picker eating keys."""
+    import subprocess
+
+    from gfunk.cli import fzf_pick
+
+    done = subprocess.CompletedProcess(args=[], returncode=0, stdout="alpha\n")
+    with (
+        patch("shutil.which", return_value="/usr/bin/fzf"),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("subprocess.run", return_value=done) as ran,
+    ):
+        assert fzf_pick(["alpha", "beta"], "pick") == "alpha"
+
+    kwargs = ran.call_args.kwargs
+    assert kwargs.get("capture_output") is not True, "this hides the picker"
+    assert kwargs.get("stderr") is None, "stderr is the picker's canvas"
+
+
+def test_fzf_is_skipped_entirely_off_a_tty() -> None:
+    """No terminal means no picker; blocking on one is the hang we are fixing."""
+    from gfunk.cli import fzf_pick
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/fzf"),
+        patch("sys.stdin.isatty", return_value=False),
+        patch("subprocess.run") as ran,
+    ):
+        assert fzf_pick(["alpha"], "pick") is None
+
+    ran.assert_not_called()
+
+
+def regulate_args(**overrides: object) -> argparse.Namespace:
+    defaults = {"limit": 200, "all": False, "json": False}
+    return argparse.Namespace(**{**defaults, **overrides})
+
+
+def owned(name: str, permissions: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "id": name,
+        "name": name,
+        "webViewLink": f"https://x/{name}",
+        "owners": [{"emailAddress": "danny@example.com"}],
+        "permissions": [
+            {"type": "user", "role": "owner", "emailAddress": "danny@example.com"},
+            *permissions,
+        ],
+    }
+
+
+def test_regulate_reports_the_worst_exposure_first(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import cmd_regulate
+
+    workspace = MagicMock()
+    workspace.sharing.return_value = [
+        owned("quiet", [{"type": "user", "role": "reader", "emailAddress": "s@o.com"}]),
+        owned("loud", [{"type": "anyone", "role": "reader"}]),
+    ]
+
+    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
+        code = cmd_regulate(regulate_args())
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.index("loud") < out.index("quiet"), "public outranks external"
+    assert "anyone with the link" in out, "say who is reached, not just how bad"
+
+
+def test_regulate_hides_unshared_files_unless_asked(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gfunk.cli import cmd_regulate
+
+    workspace = MagicMock()
+    workspace.sharing.return_value = [
+        owned("private-thing", []),
+        owned("shared-thing", [{"type": "anyone", "role": "reader"}]),
+    ]
+
+    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
+        cmd_regulate(regulate_args())
+        default = capsys.readouterr().out
+        cmd_regulate(regulate_args(all=True))
+        everything = capsys.readouterr().out
+
+    assert "private-thing" not in default, "a clean file is noise in a risk report"
+    assert "private-thing" in everything
+
+
+def test_regulate_says_so_plainly_when_nothing_is_exposed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An empty table is ambiguous; 'nothing is shared' is an answer."""
+    from gfunk.cli import cmd_regulate
+
+    workspace = MagicMock()
+    workspace.sharing.return_value = [owned("private-thing", [])]
+
+    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
+        code = cmd_regulate(regulate_args())
+
+    assert code == 0
+    assert "Nothing" in capsys.readouterr().out
+
+
+def test_regulate_emits_json_when_asked(capsys: pytest.CaptureFixture[str]) -> None:
+    from gfunk.cli import cmd_regulate
+
+    workspace = MagicMock()
+    workspace.sharing.return_value = [owned("loud", [{"type": "anyone", "role": "r"}])]
+
+    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
+        cmd_regulate(regulate_args(json=True))
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload[0]["exposure"] == "public"
+
+
+def test_regulate_is_a_registered_verb_with_a_handler() -> None:
+    from gfunk.cli import COMMANDS
+
+    assert "regulate" in COMMANDS

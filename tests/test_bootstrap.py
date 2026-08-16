@@ -10,6 +10,7 @@ from gfunk.bootstrap import (
     Kind,
     classify,
     console_urls,
+    project_of,
     diagnose,
     find_candidates,
     install,
@@ -133,3 +134,24 @@ def test_install_refuses_a_credential_that_is_not_an_installed_client(
     with pytest.raises(ValueError, match="service account"):
         install(source, dest)
     assert not dest.exists()
+
+
+def test_project_of_reads_the_project_the_client_was_made_in(tmp_path: Path) -> None:
+    path = tmp_path / "credentials.json"
+    path.write_text(json.dumps({"installed": {"project_id": "gfunk-505623"}}))
+    assert project_of(path) == "gfunk-505623"
+
+
+@pytest.mark.parametrize(
+    "payload", ["not json", '{"installed": {}}', '{"type": "service_account"}', "[]"]
+)
+def test_project_of_is_none_when_the_file_cannot_say(
+    tmp_path: Path, payload: str
+) -> None:
+    path = tmp_path / "credentials.json"
+    path.write_text(payload)
+    assert project_of(path) is None
+
+
+def test_project_of_is_none_without_a_file(tmp_path: Path) -> None:
+    assert project_of(tmp_path / "missing.json") is None

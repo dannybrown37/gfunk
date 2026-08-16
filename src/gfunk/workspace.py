@@ -11,7 +11,13 @@ from gfunk.auth import get_down
 from gfunk.cache import Cache
 
 DRIVE_FIELDS = (
-    "nextPageToken, files(id, name, mimeType, modifiedTime, owners(emailAddress))"
+    "nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, "
+    "owners(emailAddress))"
+)
+
+SHARING_FIELDS = (
+    "nextPageToken, files(id, name, webViewLink, owners(emailAddress), "
+    "permissions(id, type, role, emailAddress, domain, allowFileDiscovery))"
 )
 
 
@@ -54,6 +60,45 @@ class Workspace:
         request = self.drive.files().list(
             q=query,
             fields=DRIVE_FIELDS,
+            pageSize=min(limit, 100),
+        )
+
+        found: list[dict[str, Any]] = []
+        while request is not None and len(found) < limit:
+            response = request.execute()
+            found.extend(response.get("files", []))
+            request = self.drive.files().list_next(request, response)
+
+        found = found[:limit]
+        self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
+        return found
+
+    def recent(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Newest files first — what to fuzzy-find through when there is no term yet."""
+        response = (
+            self.drive.files()
+            .list(
+                q="trashed = false",
+                orderBy="modifiedTime desc",
+                fields=DRIVE_FIELDS,
+                pageSize=min(limit, 100),
+            )
+            .execute()
+        )
+        found: list[dict[str, Any]] = response.get("files", [])[:limit]
+        self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
+        return found
+
+    def sharing(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Files you own, with their permissions, for the exposure audit.
+
+        `permissions` rides along on the file listing rather than costing a
+        request per file — an audit worth running is an audit over everything.
+        """
+        request = self.drive.files().list(
+            q="'me' in owners and trashed = false",
+            orderBy="modifiedTime desc",
+            fields=SHARING_FIELDS,
             pageSize=min(limit, 100),
         )
 

@@ -95,12 +95,12 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `gfunk hook` | Webhooks / event triggers |
 | `gfunk loop` | Scheduled and recurring jobs |
 | `gfunk bounce` | Export |
-| `gfunk regulate` | Admin ops — permissions, cleanup, quotas |
+| `gfunk regulate` | Audit who can reach the Drive files you own |
 | `gfunk mount-up` | Guided first-run: create, install, sign in |
 | `gfunk get-down` | Sign in — the OAuth flow itself |
 | `gfunk mothership` | Start the MCP server |
 
-`mount-up`, `get-down`, `snoop`, `sample`, `mix` and `mothership` are implemented. The rest are the
+`mount-up`, `get-down`, `snoop`, `sample`, `mix`, `regulate` and `mothership` are implemented. The rest are the
 planned surface.
 
 ## Development
@@ -128,7 +128,9 @@ gfunk/
 |       |-- browser.py
 |       |-- cache.py
 |       |-- cli.py
+|       |-- errors.py
 |       |-- mothership.py
+|       |-- regulate.py
 |       `-- workspace.py
 |-- tests/
 |   |-- conftest.py
@@ -138,7 +140,9 @@ gfunk/
 |   |-- test_cache.py
 |   |-- test_cli.py
 |   |-- test_cli_mount_up.py
+|   |-- test_errors.py
 |   |-- test_mothership.py
+|   |-- test_regulate.py
 |   `-- test_workspace.py
 |-- .gitignore
 |-- .pre-commit-config.yaml

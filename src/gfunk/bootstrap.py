@@ -79,6 +79,19 @@ def diagnose(kind: Kind, path: Path) -> str:
     return messages[kind]
 
 
+def project_of(path: Path) -> str | None:
+    """The client JSON names its own project; asking the user for it is redundant."""
+    try:
+        payload = json.loads(path.read_text())
+    except OSError, json.JSONDecodeError, UnicodeDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    section = payload.get("installed") or payload.get("web") or {}
+    project = section.get("project_id") if isinstance(section, dict) else None
+    return str(project) if project else None
+
+
 def console_urls(project: str | None) -> dict[str, str]:
     suffix = f"?project={project}" if project else ""
     return {name: url + suffix for name, url in _URLS.items()}
@@ -91,11 +104,21 @@ def walkthrough(project: str | None) -> list[Step]:
         Step(
             1,
             f"Enable the Sheets API in {named}",
-            ["It should read 'API enabled'. If it offers 'Enable', click that."],
+            [
+                "It should read 'API enabled'. If it offers 'Enable', click that.",
+                "Check the project picker up top really says this project.",
+            ],
             urls["sheets_api"],
         ),
         Step(
-            2, "Enable the Drive API", ["Same screen, same check."], urls["drive_api"]
+            2,
+            "Enable the Drive API — a separate switch, not covered by step 1",
+            [
+                "Every Google API is enabled per project, one at a time.",
+                "gfunk needs both: Sheets to read rows, Drive to find the files.",
+                "Skip this and every `gfunk snoop` fails with 403 accessNotConfigured.",
+            ],
+            urls["drive_api"],
         ),
         Step(
             3,

@@ -1,6 +1,9 @@
 import argparse
 import json
 import sys
+import webbrowser
+from collections.abc import Iterator
+from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -34,12 +37,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace an already-installed client instead of reporting it",
     )
+    mount_up.add_argument("--token", type=Path, help="Where the token is cached")
+    mount_up.add_argument(
+        "--steps",
+        action="store_true",
+        help="Print the console walkthrough and stop, set up or not",
+    )
     mount_up.add_argument(
         "--no-sign-in", action="store_true", help="Install only; don't run get-down"
     )
 
+    # "login" is the word a new user types blind; "get-down" is the one we mean.
     get_down = sub.add_parser(
-        "get-down", help="Sign in — OAuth against your own GCP client"
+        "get-down",
+        aliases=["login"],
+        help="Sign in — OAuth against your own GCP client",
     )
     get_down.add_argument(
         "--client-secrets",
@@ -48,9 +60,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     get_down.add_argument("--token", type=Path, help="Where to cache the token")
 
-    snoop = sub.add_parser("snoop", help="Search Drive by file name")
+    # "search" is the word a new user types blind; "snoop" is the one we mean.
+    snoop = sub.add_parser(
+        "snoop", aliases=["search"], help="Search Drive by file name"
+    )
     snoop.add_argument("term", nargs="?", help="What to search for")
     snoop.add_argument("--limit", type=int, default=50)
+    snoop.add_argument(
+        "--browse",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Pick a result with fzf and open it (default: when interactive)",
+    )
 
     sample = sub.add_parser("sample", help="Pull rows from a spreadsheet range")
     sample.add_argument("spreadsheet_id", nargs="?")
@@ -62,6 +83,17 @@ def build_parser() -> argparse.ArgumentParser:
     mix.add_argument("cell_range", nargs="?")
     mix.add_argument("--key", help="Column whose value is matched against Drive")
     mix.add_argument("--limit", type=int, default=None)
+
+    regulate = sub.add_parser(
+        "regulate", help="Audit who can reach the Drive files you own"
+    )
+    regulate.add_argument("--limit", type=int, default=200)
+    regulate.add_argument(
+        "--all", action="store_true", help="Include files you have not shared"
+    )
+    regulate.add_argument(
+        "--json", action="store_true", help="Emit the audit as JSON instead of a table"
+    )
 
     sub.add_parser("mothership", help="Start the MCP server on stdio")
     return parser
@@ -75,10 +107,36 @@ def prompt(text: str, flag: str) -> str:
     return input(text).strip()
 
 
+def prompt_required(text: str, flag: str) -> str:
+    """An empty answer is not a value; asking again beats querying for nothing."""
+    while True:
+        answer = prompt(text, flag)
+        if answer:
+            return answer
+        print(f"Nothing entered. Ctrl-C to quit, or pass {flag}.", file=sys.stderr)
+
+
 def emit(payload: Any, replay: str) -> int:
     print(json.dumps(payload, indent=2))
     print(f"\nRun again with:\n  {replay}", file=sys.stderr)
     return 0
+
+
+@contextmanager
+def status(message: str) -> Iterator[None]:
+    """Say what the wait is for.
+
+    Silent network work is indistinguishable from a hang."""
+    if not sys.stderr.isatty():
+        yield
+        return
+    sys.stderr.write(f"{message}...")
+    sys.stderr.flush()
+    try:
+        yield
+    finally:
+        sys.stderr.write("\r\033[2K")
+        sys.stderr.flush()
 
 
 def quote(value: str) -> str:
@@ -123,24 +181,31 @@ def print_walkthrough(project: str | None) -> None:
         print()
 
 
-def fzf_pick(candidates: list[Path], header: str) -> Path | None:
-    """fzf when it is on PATH; None means fall back to the numbered prompt."""
+def fzf_pick(
+    candidates: list[Any], header: str, *, abort_ok: bool = False
+) -> str | None:
+    """fzf when it is on PATH; None means fall back to whatever the caller has."""
     import subprocess
     from shutil import which
 
-    if not which("fzf"):
+    # fzf paints its interface on stderr and reads keys from /dev/tty. Capturing
+    # stderr, or launching it with no terminal, gives an invisible picker that
+    # silently swallows the session — which reads as a hang, not as a prompt.
+    if not which("fzf") or not sys.stdin.isatty():
         return None
     result = subprocess.run(  # noqa: S603
         ["fzf", "--header", header, "--height", "40%", "--reverse"],  # noqa: S607
-        input="\n".join(str(path) for path in candidates),
-        capture_output=True,
+        input="\n".join(str(item) for item in candidates),
+        stdout=subprocess.PIPE,
         text=True,
         check=False,
     )
     chosen = result.stdout.strip()
-    if not chosen:
-        raise KeyboardInterrupt  # esc in fzf means abort, not "ask me again"
-    return Path(chosen)
+    if chosen:
+        return chosen
+    if abort_ok:
+        return None  # browsing is optional; esc just means "done looking"
+    raise KeyboardInterrupt  # esc in fzf means abort, not "ask me again"
 
 
 def choose_download() -> Path | None:
@@ -156,7 +221,7 @@ def choose_download() -> Path | None:
 
     picked = fzf_pick(candidates, "Which downloaded OAuth client JSON?")
     if picked is not None:
-        return picked
+        return Path(picked)
 
     print("\nFound:")
     for index, path in enumerate(candidates, start=1):
@@ -170,7 +235,16 @@ def choose_download() -> Path | None:
     return Path(answer).expanduser() if answer else None
 
 
-def offer_sign_in(dest: Path, *, skip: bool = False) -> int:
+def offer_sign_in(dest: Path, token: Path | None = None, *, skip: bool = False) -> int:
+    from gfunk.auth import DEFAULT_TOKEN_PATH, token_state
+
+    token = token or DEFAULT_TOKEN_PATH
+    if token_state(token) in ("signed-in", "refreshable"):
+        print(f"\nAlready signed in; token cached at {token}.")
+        print("Try:")
+        print("  gfunk snoop <name>")
+        return 0
+
     if skip or not sys.stdin.isatty():
         print("\nNow sign in:")
         print("  gfunk get-down")
@@ -179,32 +253,38 @@ def offer_sign_in(dest: Path, *, skip: bool = False) -> int:
         print("\nWhen you are ready:")
         print("  gfunk get-down")
         return 0
-    return cmd_get_down(argparse.Namespace(client_secrets=dest, token=None))
+    return cmd_get_down(argparse.Namespace(client_secrets=dest, token=token))
 
 
-def already_installed(dest: Path) -> int:
+def already_installed(dest: Path, token: Path | None = None) -> int:
     print(f"OAuth client already installed at {dest}.")
     print("Replace it with:")
     print(f"  gfunk mount-up --reinstall --dest {quote(str(dest))}")
-    return offer_sign_in(dest)
+    print("Re-read the console steps with:")
+    print("  gfunk mount-up --steps")
+    return offer_sign_in(dest, token)
 
 
 def cmd_mount_up(args: argparse.Namespace) -> int:
     from gfunk.auth import DEFAULT_CLIENT_SECRETS
-    from gfunk.bootstrap import classify, diagnose, install
+    from gfunk.bootstrap import classify, diagnose, install, project_of
 
     dest = args.dest or DEFAULT_CLIENT_SECRETS
     source = args.client_secrets
 
+    if args.steps:
+        print_walkthrough(args.project or project_of(dest))
+        return 0
+
     if source is None and not args.reinstall:
         installed = classify(dest)
         if installed == "installed":
-            return already_installed(dest)
+            return already_installed(dest, args.token)
         if installed != "missing":
             print(diagnose(installed, dest), file=sys.stderr)
 
     if source is None:
-        print_walkthrough(args.project)
+        print_walkthrough(args.project or project_of(dest))
         if not sys.stdin.isatty():
             print("Then install it with:")
             print(f"  gfunk mount-up --client-secrets <file.json> --dest {dest}")
@@ -228,22 +308,86 @@ def cmd_mount_up(args: argparse.Namespace) -> int:
         f"--dest {quote(str(dest))}"
     )
 
-    return offer_sign_in(dest, skip=args.no_sign_in)
+    return offer_sign_in(dest, args.token, skip=args.no_sign_in)
+
+
+def pick(found: list[dict[str, Any]], header: str) -> dict[str, Any] | None:
+    """Fuzzy-find over what Drive returned; fzf does the filtering as you type."""
+    labels = {f"{item['name']}\t{item.get('id', '')}": item for item in found}
+    chosen = fzf_pick(list(labels), header, abort_ok=True)
+    return labels[chosen] if chosen is not None else None
+
+
+def browse(found: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Pick a hit and open it where the human can read it: their browser."""
+    from gfunk.browser import register as register_browser
+
+    item = pick(found, "Open which in your browser?")
+    if item is None:
+        return None
+
+    link = item.get("webViewLink") or f"https://drive.google.com/open?id={item['id']}"
+    register_browser()
+    if not webbrowser.open(link):
+        print(f"Could not open a browser. The link is:\n  {link}", file=sys.stderr)
+    return item
+
+
+def can_browse() -> bool:
+    from shutil import which
+
+    return sys.stdin.isatty() and which("fzf") is not None
 
 
 def cmd_snoop(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
-    term = args.term or prompt("Search Drive for: ", "a search term")
-    found = Workspace.connect().snoop(term, limit=args.limit)
-    return emit(found, f"gfunk snoop {quote(term)} --limit {args.limit}")
+    # No term and a human at the keyboard: browse the newest files and filter in fzf,
+    # rather than demanding a search term for files they have not named yet.
+    browsing = not args.term and args.browse is not False and can_browse()
+
+    # Resolve arguments before authenticating: a missing one should not cost a login.
+    term = (
+        None
+        if browsing
+        else (args.term or prompt_required("Search Drive for: ", "a search term"))
+    )
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    if browsing:
+        print(
+            "No search term given, so: pick from your newest Drive files.",
+            file=sys.stderr,
+        )
+        with status(f"Fetching your {args.limit} newest Drive files"):
+            found = workspace.recent(limit=args.limit)
+        if not found:
+            print("Drive returned nothing to browse.", file=sys.stderr)
+            return 1
+        item = browse(found)
+        if item is None:
+            return 0
+        return emit(item, f"gfunk snoop {quote(item['name'])} --limit {args.limit}")
+
+    assert term is not None
+    with status(f"Searching Drive for {quote(term)}"):
+        found = workspace.snoop(term, limit=args.limit)
+    code = emit(found, f"gfunk snoop {quote(term)} --limit {args.limit}")
+
+    wants = args.browse if args.browse is not None else can_browse()
+    if wants and found:
+        browse(found)
+    return code
 
 
 def cmd_sample(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
-    sheet = args.spreadsheet_id or prompt("Spreadsheet id: ", "a spreadsheet id")
-    cell_range = args.cell_range or prompt("Range (e.g. A1:D50): ", "a range")
+    sheet = args.spreadsheet_id or prompt_required(
+        "Spreadsheet id: ", "a spreadsheet id"
+    )
+    cell_range = args.cell_range or prompt_required("Range (e.g. A1:D50): ", "a range")
     rows = Workspace.connect().sample(sheet, cell_range, limit=args.limit)
     return emit(rows, f"gfunk sample {quote(sheet)} {quote(cell_range)}")
 
@@ -251,9 +395,11 @@ def cmd_sample(args: argparse.Namespace) -> int:
 def cmd_mix(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
-    sheet = args.spreadsheet_id or prompt("Spreadsheet id: ", "a spreadsheet id")
-    cell_range = args.cell_range or prompt("Range (e.g. A1:D50): ", "a range")
-    key = args.key or prompt("Column to match on: ", "--key")
+    sheet = args.spreadsheet_id or prompt_required(
+        "Spreadsheet id: ", "a spreadsheet id"
+    )
+    cell_range = args.cell_range or prompt_required("Range (e.g. A1:D50): ", "a range")
+    key = args.key or prompt_required("Column to match on: ", "--key")
 
     try:
         mixed = Workspace.connect().mix(sheet, cell_range, key, limit=args.limit)
@@ -273,18 +419,68 @@ def cmd_mothership(_: argparse.Namespace) -> int:
     return 0
 
 
+EXPOSURE_LABELS = {
+    "public": "PUBLIC  ",
+    "external": "EXTERNAL",
+    "internal": "INTERNAL",
+    "unknown": "UNKNOWN ",
+    "private": "private ",
+}
+
+
+def cmd_regulate(args: argparse.Namespace) -> int:
+    from gfunk.regulate import audit, summarise
+    from gfunk.workspace import Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+    with status(f"Reading sharing on up to {args.limit} files you own"):
+        files = workspace.sharing(limit=args.limit)
+
+    rows = audit(files, shared_only=not args.all)
+
+    if args.json:
+        return emit(rows, f"gfunk regulate --limit {args.limit} --json")
+
+    if not rows:
+        print(f"Nothing is shared. Checked {len(files)} files you own.")
+        return 0
+
+    for row in rows:
+        label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
+        print(f"{label}  {row['name']}")
+        for reach in row["reached_by"]:
+            print(f"            └─ {reach}")
+        if row["link"]:
+            print(f"            {row['link']}")
+
+    counts = summarise(rows)
+    tally = ", ".join(f"{count} {level}" for level, count in counts.items() if count)
+    print(f"\n{tally or 'nothing shared'} — out of {len(files)} files you own.")
+    print("\nRun again with:\n  gfunk regulate", file=sys.stderr)
+    return 0
+
+
 COMMANDS = {
     "mount-up": cmd_mount_up,
     "setup": cmd_mount_up,
     "get-down": cmd_get_down,
+    "login": cmd_get_down,
     "snoop": cmd_snoop,
+    "search": cmd_snoop,
     "sample": cmd_sample,
     "mix": cmd_mix,
+    "regulate": cmd_regulate,
     "mothership": cmd_mothership,
 }
 
 
 def main(argv: list[str] | None = None) -> None:
+    from googleapiclient.errors import HttpError
+
+    from gfunk.auth import MissingClientSecretsError
+    from gfunk.errors import explain
+
     try:
         parser = build_parser()
         args = parser.parse_args(argv)
@@ -294,6 +490,12 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit(2)
 
         raise SystemExit(COMMANDS[args.command](args))
+    except HttpError as exc:
+        print(explain(exc), file=sys.stderr)
+        raise SystemExit(1) from None
+    except MissingClientSecretsError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from None
     except KeyboardInterrupt, EOFError:
         print("\nCancelled.", file=sys.stderr)
         raise SystemExit(130) from None

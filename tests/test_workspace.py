@@ -90,3 +90,48 @@ def test_mix_raises_on_an_unknown_key_column(cache: Cache) -> None:
 
     with pytest.raises(KeyError):
         ws.mix("sheet-id", "A1:A2", key="Nope")
+
+
+def test_recent_asks_drive_for_the_newest_files_first() -> None:
+    drive = MagicMock()
+    drive.files.return_value.list.return_value.execute.return_value = {
+        "files": [{"id": "a", "name": "Budget"}, {"id": "b", "name": "Notes"}]
+    }
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    found = workspace.recent(limit=1)
+
+    assert [f["id"] for f in found] == ["a"], "limit trims the page Drive returned"
+    kwargs = drive.files.return_value.list.call_args.kwargs
+    assert kwargs["orderBy"] == "modifiedTime desc"
+    assert kwargs["q"] == "trashed = false"
+
+
+def test_sharing_asks_only_for_files_you_own_and_their_permissions() -> None:
+    """You only regulate what you own, and permissions ride in the same page."""
+    drive = MagicMock()
+    drive.files.return_value.list.return_value.execute.return_value = {"files": []}
+    drive.files.return_value.list_next.return_value = None
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    workspace.sharing(limit=10)
+
+    kwargs = drive.files.return_value.list.call_args.kwargs
+    assert "'me' in owners" in kwargs["q"]
+    assert "trashed = false" in kwargs["q"]
+    assert "permissions(" in kwargs["fields"], "one call, not one per file"
+
+
+def test_sharing_pages_until_the_limit_is_met() -> None:
+    drive = MagicMock()
+    pages = [
+        {"files": [{"id": "a"}, {"id": "b"}]},
+        {"files": [{"id": "c"}]},
+    ]
+    request = drive.files.return_value.list.return_value
+    request.execute.side_effect = pages
+    # The same request object comes back once, so page two runs through execute too.
+    drive.files.return_value.list_next.side_effect = [request, None]
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    assert [f["id"] for f in workspace.sharing(limit=10)] == ["a", "b", "c"]
