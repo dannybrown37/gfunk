@@ -17,6 +17,24 @@ DRIVE_FIELDS = (
 )
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
+SHEET_MIME = "application/vnd.google-apps.spreadsheet"
+DOC_MIME = "application/vnd.google-apps.document"
+
+EXPORT_MIME_MAP: dict[str, dict[str, str]] = {
+    SHEET_MIME: {
+        "csv": "text/csv",
+        "tsv": "text/tab-separated-values",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    DOC_MIME: {
+        "txt": "text/plain",
+        "html": "text/html",
+        "docx": (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        "md": "text/plain",
+    },
+}
 
 SHARING_FIELDS = (
     "nextPageToken, files(id, name, webViewLink, parents, owners(emailAddress), "
@@ -196,3 +214,41 @@ class Workspace:
                 raise KeyError(message)
             mixed.append({**row, "drive_matches": self.snoop(row[key])})
         return mixed
+
+    def spreadsheets(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Recent spreadsheets, for interactive pickers."""
+        query = f"mimeType = '{SHEET_MIME}' and trashed = false"
+        response = (
+            self.drive.files()
+            .list(
+                q=query,
+                orderBy="modifiedTime desc",
+                fields=DRIVE_FIELDS,
+                pageSize=min(limit, 100),
+            )
+            .execute()
+        )
+        return list(response.get("files", [])[:limit])
+
+    def sheet_tabs(self, spreadsheet_id: str) -> list[str]:
+        """Tab names in a spreadsheet, for range pickers."""
+        meta = (
+            self.sheets.spreadsheets()
+            .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
+            .execute()
+        )
+        return [str(s["properties"]["title"]) for s in meta.get("sheets", [])]
+
+    def file_meta(self, file_id: str) -> dict[str, Any]:
+        """Metadata for a single file."""
+        return dict(
+            self.drive.files()
+            .get(fileId=file_id, fields="id,name,mimeType,webViewLink")
+            .execute()
+        )
+
+    def export(self, file_id: str, mime_type: str) -> bytes:
+        """Export a Google Workspace file to the given MIME type."""
+        return bytes(
+            self.drive.files().export(fileId=file_id, mimeType=mime_type).execute()
+        )

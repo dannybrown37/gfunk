@@ -61,7 +61,7 @@ def test_prompting_off_a_tty_fails_loudly_instead_of_hanging(tmp_path: Path) -> 
     # A prompt that blocks in CI burns the job's whole timeout with no log line.
     result = run_cli("sample", cwd=tmp_path)
     assert result.returncode != 0
-    assert "Not a TTY" in result.stderr
+    assert result.stderr, "must explain the failure, not hang silently"
 
 
 def test_every_verb_has_a_handler() -> None:

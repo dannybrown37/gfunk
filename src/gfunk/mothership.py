@@ -61,6 +61,30 @@ def build_server(
         """Join matching Drive files onto each row of a sheet range."""
         return connect().mix(spreadsheet_id, cell_range, key, limit=limit)
 
+    @server.tool(name=f"{TOOL_PREFIX}regulate")
+    def regulate(limit: int = 200, *, shared_only: bool = True) -> list[dict[str, Any]]:
+        """Audit who can reach the Drive files you own, ranked by exposure."""
+        from gfunk.regulate import audit
+
+        ws = connect()
+        files = ws.sharing(limit=limit)
+        return audit(files, shared_only=shared_only)
+
+    @server.tool(name=f"{TOOL_PREFIX}dig")
+    def dig(file_id: str) -> dict[str, Any]:
+        """Get metadata for a Drive file. For spreadsheets, includes the tail rows."""
+        ws = connect()
+        meta = ws.file_meta(file_id)
+        from gfunk.workspace import SHEET_MIME
+
+        if meta.get("mimeType") == SHEET_MIME:
+            tabs = ws.sheet_tabs(file_id)
+            tab = tabs[0] if tabs else "Sheet1"
+            rows = ws.sample(file_id, tab)
+            meta["tail_rows"] = rows[-20:]
+            meta["total_rows"] = len(rows)
+        return meta
+
     return server
 
 

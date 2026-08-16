@@ -69,7 +69,7 @@ gfunk names the missing flag and exits rather than hanging a CI job.
 }
 ```
 
-Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__mix`. **stdio only** — an HTTP
+Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__mix`, `gfunk__regulate`, `gfunk__dig`. **stdio only** — an HTTP
 listener holding live Workspace credentials is attack surface this project doesn't need yet.
 
 ### The local cache
@@ -88,20 +88,20 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 
 | Command | What it does |
 |---|---|
-| `gfunk snoop` | Search across mail/drive/calendar |
-| `gfunk dig` | Deep archive search — the slow, thorough one |
+| `gfunk snoop` | Browse Drive folders like directories |
+| `gfunk dig` | Open a Doc in your browser, or show the tail of a spreadsheet |
 | `gfunk sample` | Pull a subset of records for analysis |
-| `gfunk mix` | Join data across services |
+| `gfunk mix` | Join Drive files onto sheet rows by column |
+| `gfunk bounce` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `gfunk hook` | Webhooks / event triggers |
 | `gfunk loop` | Scheduled and recurring jobs |
-| `gfunk bounce` | Export |
 | `gfunk regulate` | Audit who can reach the Drive files you own |
 | `gfunk mount-up` | Guided first-run: create, install, sign in |
 | `gfunk get-down` | Sign in — the OAuth flow itself |
 | `gfunk mothership` | Start the MCP server |
 
-`mount-up`, `get-down`, `snoop`, `sample`, `mix`, `regulate` and `mothership` are implemented. The rest are the
-planned surface.
+`mount-up`, `get-down`, `snoop`, `dig`, `sample`, `mix`, `bounce`, `regulate` and `mothership` are implemented.
+`hook` and `loop` are the planned surface.
 
 ## Development
 
@@ -139,9 +139,12 @@ gfunk/
 |   |-- test_browser.py
 |   |-- test_cache.py
 |   |-- test_cli.py
+|   |-- test_cli_bounce.py
+|   |-- test_cli_dig.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
+|   |-- test_cli_sample.py
 |   |-- test_errors.py
 |   |-- test_mothership.py
 |   |-- test_regulate.py

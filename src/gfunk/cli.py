@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     # "browse" is the word a new user types blind; "snoop" is the one we mean.
     snoop = sub.add_parser(
         "snoop",
-        aliases=["browse", "search"],
+        aliases=["browse"],
         help="Walk your Drive folders like directories",
     )
     snoop.add_argument(
@@ -82,6 +82,19 @@ def build_parser() -> argparse.ArgumentParser:
     mix.add_argument("--key", help="Column whose value is matched against Drive")
     mix.add_argument("--limit", type=int, default=None)
 
+    dig = sub.add_parser(
+        "dig",
+        aliases=["open"],
+        help="Open a Doc in your browser, or show the tail of a spreadsheet",
+    )
+    dig.add_argument("file_id", nargs="?", help="Drive file id")
+    dig.add_argument(
+        "--rows",
+        type=int,
+        default=20,
+        help="How many rows from the bottom to show (sheets only)",
+    )
+
     regulate = sub.add_parser(
         "regulate",
         aliases=["audit"],
@@ -93,6 +106,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     regulate.add_argument(
         "--json", action="store_true", help="Emit the audit as JSON instead of a table"
+    )
+
+    bounce = sub.add_parser(
+        "bounce",
+        aliases=["export"],
+        help="Export a Google Workspace file (Sheets→CSV/JSON, Docs→txt/html)",
+    )
+    bounce.add_argument("file_id", nargs="?", help="Drive file id")
+    bounce.add_argument(
+        "--format",
+        dest="fmt",
+        help="Export format: csv, tsv, xlsx, json, txt, html, docx, md",
+    )
+    bounce.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Write to file instead of stdout",
+    )
+    bounce.add_argument(
+        "--tab",
+        help="Sheet tab name (defaults to first tab)",
     )
 
     sub.add_parser("mothership", help="Start the MCP server on stdio")
@@ -427,28 +462,159 @@ def cmd_snoop(args: argparse.Namespace) -> int:
     return 0
 
 
+def pick_file(workspace: Any) -> dict[str, Any] | None:
+    """fzf over recent Drive files; returns file metadata dict or None."""
+    if not can_browse():
+        return None
+    with status("Loading recent files"):
+        files = workspace.recent()
+    if not files:
+        return None
+    labels = {f"{f['name']}\t{f['id']}": f for f in files}
+    chosen = fzf_pick(list(labels), "Pick a file", abort_ok=True)
+    return labels[chosen] if chosen else None
+
+
+def cmd_dig(args: argparse.Namespace) -> int:
+    from gfunk.workspace import SHEET_MIME, Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    file_id = args.file_id
+    file_meta = None
+
+    if not file_id:
+        file_meta = pick_file(workspace)
+        if not file_meta:
+            file_id = prompt_required("File id: ", "a file id")
+
+    if file_meta:
+        file_id = file_meta["id"]
+    else:
+        with status("Reading file metadata"):
+            file_meta = workspace.file_meta(file_id)
+
+    mime = file_meta.get("mimeType", "")
+    name = file_meta.get("name", file_id)
+
+    if mime == SHEET_MIME:
+        with status(f"Reading tabs of {name}"):
+            tabs = workspace.sheet_tabs(file_id)
+        if not tabs:
+            print("No tabs found.", file=sys.stderr)
+            return 1
+        tab = tabs[0]
+        if len(tabs) > 1 and can_browse():
+            picked = fzf_pick(tabs, "Which tab?", abort_ok=True)
+            if picked:
+                tab = picked
+        with status(f"Reading {name} / {tab}"):
+            rows = workspace.sample(file_id, tab)
+        tail = rows[-args.rows :] if len(rows) > args.rows else rows
+        return emit(
+            tail,
+            f"gfunk dig {quote(file_id)} --rows {args.rows}",
+        )
+
+    open_in_browser(file_meta)
+    print(f"Opened {name} in your browser.", file=sys.stderr)
+    return emit(
+        file_meta,
+        f"gfunk dig {quote(file_id)}",
+    )
+
+
+def pick_spreadsheet(workspace: Any) -> str | None:
+    """fzf over recent spreadsheets when interactive; None otherwise."""
+    if not can_browse():
+        return None
+    with status("Finding your spreadsheets"):
+        sheets = workspace.spreadsheets()
+    if not sheets:
+        return None
+    labels = {f"{s['name']}\t{s['id']}": s["id"] for s in sheets}
+    chosen = fzf_pick(list(labels), "Pick a spreadsheet", abort_ok=True)
+    return labels[chosen] if chosen else None
+
+
+def pick_range(workspace: Any, spreadsheet_id: str) -> str | None:
+    """fzf over sheet tabs; returns 'TabName' or None."""
+    if not can_browse():
+        return None
+    with status("Reading sheet tabs"):
+        tabs: list[str] = workspace.sheet_tabs(spreadsheet_id)
+    if not tabs:
+        return None
+    if len(tabs) == 1:
+        return tabs[0]
+    return fzf_pick(tabs, "Pick a tab", abort_ok=True)
+
+
 def cmd_sample(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
-    sheet = args.spreadsheet_id or prompt_required(
-        "Spreadsheet id: ", "a spreadsheet id"
-    )
-    cell_range = args.cell_range or prompt_required("Range (e.g. A1:D50): ", "a range")
-    rows = Workspace.connect().sample(sheet, cell_range, limit=args.limit)
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    sheet = args.spreadsheet_id
+    if not sheet:
+        sheet = pick_spreadsheet(workspace)
+    if not sheet:
+        sheet = prompt_required("Spreadsheet id: ", "a spreadsheet id")
+
+    cell_range = args.cell_range
+    if not cell_range:
+        cell_range = pick_range(workspace, sheet)
+    if not cell_range:
+        cell_range = prompt_required("Range (e.g. A1:D50): ", "a range")
+
+    with status("Pulling rows"):
+        rows = workspace.sample(sheet, cell_range, limit=args.limit)
     return emit(rows, f"gfunk sample {quote(sheet)} {quote(cell_range)}")
+
+
+def pick_column(workspace: Any, spreadsheet_id: str, cell_range: str) -> str | None:
+    """fzf over column headers for --key selection."""
+    if not can_browse():
+        return None
+    with status("Reading column headers"):
+        rows = workspace.sample(spreadsheet_id, cell_range, limit=1)
+    if not rows:
+        return None
+    columns = list(rows[0].keys())
+    if not columns:
+        return None
+    return fzf_pick(columns, "Pick a column to join on", abort_ok=True)
 
 
 def cmd_mix(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
-    sheet = args.spreadsheet_id or prompt_required(
-        "Spreadsheet id: ", "a spreadsheet id"
-    )
-    cell_range = args.cell_range or prompt_required("Range (e.g. A1:D50): ", "a range")
-    key = args.key or prompt_required("Column to match on: ", "--key")
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    sheet = args.spreadsheet_id
+    if not sheet:
+        sheet = pick_spreadsheet(workspace)
+    if not sheet:
+        sheet = prompt_required("Spreadsheet id: ", "a spreadsheet id")
+
+    cell_range = args.cell_range
+    if not cell_range:
+        cell_range = pick_range(workspace, sheet)
+    if not cell_range:
+        cell_range = prompt_required("Range (e.g. A1:D50): ", "a range")
+
+    key = args.key
+    if not key:
+        key = pick_column(workspace, sheet, cell_range)
+    if not key:
+        key = prompt_required("Column to match on: ", "--key")
 
     try:
-        mixed = Workspace.connect().mix(sheet, cell_range, key, limit=args.limit)
+        with status("Joining Drive files onto rows"):
+            mixed = workspace.mix(sheet, cell_range, key, limit=args.limit)
     except KeyError as exc:
         print(exc.args[0], file=sys.stderr)
         return 1
@@ -456,6 +622,92 @@ def cmd_mix(args: argparse.Namespace) -> int:
         mixed,
         f"gfunk mix {quote(sheet)} {quote(cell_range)} --key {quote(key)}",
     )
+
+
+def _default_format(mime: str) -> str:
+    from gfunk.workspace import DOC_MIME, SHEET_MIME
+
+    if mime == SHEET_MIME:
+        return "csv"
+    if mime == DOC_MIME:
+        return "txt"
+    return "csv"
+
+
+def _bounce_as_json(
+    workspace: Any, file_id: str, tab: str | None, output: Path | None
+) -> int:
+    """Export a sheet as JSON records via the Sheets API (not Drive export)."""
+    if not tab:
+        tabs = workspace.sheet_tabs(file_id)
+        tab = tabs[0] if tabs else "Sheet1"
+    rows = workspace.sample(file_id, tab)
+    payload = json.dumps(rows, indent=2)
+    if output:
+        output.write_text(payload)
+        print(f"Wrote {len(rows)} records to {output}", file=sys.stderr)
+    else:
+        print(payload)
+    return 0
+
+
+def cmd_bounce(args: argparse.Namespace) -> int:
+    import sys as _sys
+
+    from gfunk.workspace import EXPORT_MIME_MAP, SHEET_MIME, Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    file_id = args.file_id
+    file_meta = None
+
+    if not file_id:
+        file_meta = pick_file(workspace)
+        if not file_meta:
+            file_id = prompt_required("File id: ", "a file id")
+
+    if file_meta:
+        file_id = file_meta["id"]
+    else:
+        with status("Reading file metadata"):
+            file_meta = workspace.file_meta(file_id)
+
+    mime = file_meta.get("mimeType", "")
+    name = file_meta.get("name", file_id)
+    fmt = args.fmt or _default_format(mime)
+
+    if fmt == "json" and mime == SHEET_MIME:
+        rc = _bounce_as_json(workspace, file_id, args.tab, args.output)
+        replay = f"gfunk bounce {quote(file_id)} --format json"
+        if args.output:
+            replay += f" -o {quote(str(args.output))}"
+        print(f"\nRun again with:\n  {replay}", file=_sys.stderr)
+        return rc
+
+    mime_map = EXPORT_MIME_MAP.get(mime, {})
+    if fmt not in mime_map:
+        valid = ", ".join(sorted(mime_map)) if mime_map else "(no exports available)"
+        print(
+            f"Cannot export {name} ({mime}) as {fmt}. Valid: {valid}",
+            file=sys.stderr,
+        )
+        return 1
+
+    with status(f"Exporting {name} as {fmt}"):
+        data = workspace.export(file_id, mime_map[fmt])
+
+    if args.output:
+        args.output.write_bytes(data)
+        print(f"Wrote {len(data)} bytes to {args.output}", file=sys.stderr)
+    else:
+        _sys.stdout.buffer.write(data)
+
+    replay = f"gfunk bounce {quote(file_id)} --format {fmt}"
+    if args.output:
+        replay += f" -o {quote(str(args.output))}"
+    print(f"\nRun again with:\n  {replay}", file=_sys.stderr)
+    return 0
 
 
 def cmd_mothership(_: argparse.Namespace) -> int:
@@ -577,9 +829,12 @@ COMMANDS = {
     "login": cmd_get_down,
     "snoop": cmd_snoop,
     "browse": cmd_snoop,
-    "search": cmd_snoop,
+    "dig": cmd_dig,
+    "open": cmd_dig,
     "sample": cmd_sample,
     "mix": cmd_mix,
+    "bounce": cmd_bounce,
+    "export": cmd_bounce,
     "regulate": cmd_regulate,
     "audit": cmd_regulate,
     "mothership": cmd_mothership,

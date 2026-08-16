@@ -303,7 +303,7 @@ def main_code(argv: list[str]) -> int:
 
 @pytest.mark.parametrize(
     ("alias", "canonical"),
-    [("setup", "mount-up"), ("login", "get-down"), ("search", "snoop")],
+    [("setup", "mount-up"), ("login", "get-down"), ("browse", "snoop")],
 )
 def test_the_word_a_new_user_types_blind_reaches_the_real_command(
     alias: str, canonical: str
