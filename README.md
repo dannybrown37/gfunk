@@ -30,11 +30,23 @@ uv sync
 
 ## Usage
 
-Put your downloaded OAuth client JSON at `~/.config/gfunk/credentials.json` (or pass
-`--client-secrets`), then:
+First run, once per machine:
 
 ```bash
-gfunk mount-up                              # one-time OAuth
+gfunk mount-up                              # guided: create your OAuth client, then sign in
+```
+
+`mount-up` prints the five Google Cloud console screens (with direct links — pass
+`--project <id>` to point them at your project), finds the downloaded
+`client_secret*.json` in your Downloads folders, checks it is a **Desktop app** client,
+installs it to `~/.config/gfunk/credentials.json` mode 0600, and offers to sign you in.
+`gfunk setup` is an alias, since that is what people type blind. Off a TTY it prints the
+walkthrough and the scriptable form, `gfunk mount-up --client-secrets <file>`.
+
+Already have a token? Everything else just works:
+
+```bash
+gfunk get-down                              # sign in (OAuth), on its own
 gfunk snoop "Q3 report"                     # search Drive
 gfunk sample <sheet-id> 'Sheet1!A1:D50'     # pull rows as records
 gfunk mix <sheet-id> 'Sheet1!A1:D50' --key Name   # join Drive files onto rows
@@ -84,10 +96,11 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `gfunk loop` | Scheduled and recurring jobs |
 | `gfunk bounce` | Export |
 | `gfunk regulate` | Admin ops — permissions, cleanup, quotas |
-| `gfunk mount-up` | First-run OAuth |
+| `gfunk mount-up` | Guided first-run: create, install, sign in |
+| `gfunk get-down` | Sign in — the OAuth flow itself |
 | `gfunk mothership` | Start the MCP server |
 
-`mount-up`, `snoop`, `sample`, `mix` and `mothership` are implemented. The rest are the
+`mount-up`, `get-down`, `snoop`, `sample`, `mix` and `mothership` are implemented. The rest are the
 planned surface.
 
 ## Development
@@ -111,6 +124,8 @@ gfunk/
 |       |-- __init__.py
 |       |-- __main__.py
 |       |-- auth.py
+|       |-- bootstrap.py
+|       |-- browser.py
 |       |-- cache.py
 |       |-- cli.py
 |       |-- mothership.py
@@ -118,8 +133,11 @@ gfunk/
 |-- tests/
 |   |-- conftest.py
 |   |-- test_auth.py
+|   |-- test_bootstrap.py
+|   |-- test_browser.py
 |   |-- test_cache.py
 |   |-- test_cli.py
+|   |-- test_cli_mount_up.py
 |   |-- test_mothership.py
 |   `-- test_workspace.py
 |-- .gitignore

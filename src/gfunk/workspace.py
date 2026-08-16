@@ -1,13 +1,13 @@
 """The read surface: Drive search, Sheets reads, and the join between them.
 
-Everything here is read-only, matching the scopes `mount-up` requests.
+Everything here is read-only, matching the scopes `get-down` requests.
 """
 
 from typing import Any
 
 from googleapiclient.discovery import build
 
-from gfunk.auth import mount_up
+from gfunk.auth import get_down
 from gfunk.cache import Cache
 
 DRIVE_FIELDS = (
@@ -41,7 +41,7 @@ class Workspace:
 
     @classmethod
     def connect(cls, cache: Cache | None = None) -> Workspace:
-        creds = mount_up()
+        creds = get_down()
         return cls(
             drive=build("drive", "v3", credentials=creds),
             sheets=build("sheets", "v4", credentials=creds),

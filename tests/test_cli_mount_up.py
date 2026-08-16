@@ -1,0 +1,216 @@
+import json
+import stat
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from gfunk.cli import main
+
+
+def client_json(tmp_path: Path, name: str = "client_secret_1.json") -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps({"installed": {"client_id": "x", "client_secret": "y"}}))
+    return path
+
+
+def test_mount_up_prints_the_walkthrough_without_a_tty(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(["mount-up", "--project", "proj-1", "--dest", str(dest)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "project=proj-1" in out
+    assert "Desktop app" in out
+    assert "--client-secrets" in out, "non-interactive users need the scriptable form"
+
+
+def test_mount_up_installs_a_named_file_without_prompting(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(
+            ["setup", "--client-secrets", str(source), "--dest", str(dest)]
+        )
+
+    assert code == 0
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o600
+    assert "gfunk get-down" in capsys.readouterr().out
+
+
+def test_mount_up_rejects_a_service_account_key_with_a_useful_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "sa.json"
+    source.write_text(json.dumps({"type": "service_account"}))
+    dest = tmp_path / "config" / "credentials.json"
+
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(
+            ["setup", "--client-secrets", str(source), "--dest", str(dest)]
+        )
+
+    assert code == 1
+    assert "service account" in capsys.readouterr().err
+    assert not dest.exists()
+
+
+def test_mount_up_picks_the_newest_download_when_confirmed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", side_effect=["", "1", "n"], create=True),
+        patch("gfunk.bootstrap.default_download_dirs", return_value=[tmp_path]),
+        patch("gfunk.cli.fzf_pick", return_value=None),
+    ):
+        code = main_code(["mount-up", "--dest", str(dest)])
+
+    assert code == 0
+    assert dest.exists()
+    replay = capsys.readouterr().out
+    assert f"--client-secrets {source}" in replay, (
+        "an interactive run must echo a replayable one"
+    )
+
+
+def test_mount_up_offers_to_sign_in_and_runs_get_down(tmp_path: Path) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="", create=True),
+        patch("gfunk.cli.cmd_get_down", return_value=0) as signed_in,
+    ):
+        code = main_code(
+            ["mount-up", "--client-secrets", str(source), "--dest", str(dest)]
+        )
+
+    assert code == 0
+    assert signed_in.call_args.args[0].client_secrets == dest
+
+
+def test_mount_up_declining_sign_in_leaves_the_next_command(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="n", create=True),
+        patch("gfunk.cli.cmd_get_down") as signed_in,
+    ):
+        code = main_code(
+            ["mount-up", "--client-secrets", str(source), "--dest", str(dest)]
+        )
+
+    signed_in.assert_not_called()
+    assert code == 0
+    assert "gfunk get-down" in capsys.readouterr().out
+
+
+def test_setup_is_an_alias_for_mount_up(tmp_path: Path) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(
+            ["setup", "--client-secrets", str(source), "--dest", str(dest)]
+        )
+
+    assert code == 0
+    assert dest.exists()
+
+
+def test_mount_up_reports_an_already_installed_client_instead_of_the_walkthrough(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="n", create=True),
+    ):
+        code = main_code(["mount-up", "--dest", str(dest)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert str(dest) in out
+    assert "Desktop app" not in out, "already set up; don't re-run the walkthrough"
+
+
+def test_mount_up_reinstall_forces_the_walkthrough(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(["mount-up", "--dest", str(dest), "--reinstall"])
+
+    assert code == 0
+    assert "Desktop app" in capsys.readouterr().out
+
+
+def test_mount_up_walks_through_when_the_installed_file_is_the_wrong_kind(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(json.dumps({"type": "service_account"}))
+
+    with patch("sys.stdin.isatty", return_value=False):
+        code = main_code(["mount-up", "--dest", str(dest)])
+
+    out = capsys.readouterr()
+    assert code == 0
+    assert "service account" in out.err
+    assert "Desktop app" in out.out
+
+
+def test_ctrl_c_exits_cleanly_without_a_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with patch("gfunk.cli.build_parser", side_effect=KeyboardInterrupt):
+        code = main_code([])
+
+    assert code == 130
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_download_selection_uses_fzf_when_available(tmp_path: Path) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", side_effect=["", "n"], create=True),
+        patch("gfunk.bootstrap.default_download_dirs", return_value=[tmp_path]),
+        patch("gfunk.cli.fzf_pick", return_value=source) as picker,
+    ):
+        code = main_code(["mount-up", "--dest", str(dest)])
+
+    assert code == 0
+    assert picker.call_args.args[0] == [source]
+    assert dest.exists()
+
+
+def main_code(argv: list[str]) -> int:
+    with pytest.raises(SystemExit) as exc:
+        main(argv)
+    assert isinstance(exc.value.code, int)
+    return exc.value.code

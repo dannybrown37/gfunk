@@ -4,6 +4,10 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
+from gfunk.bootstrap import classify, diagnose
+from gfunk.browser import hyperlink
+from gfunk.browser import register as register_browser
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -14,11 +18,17 @@ DEFAULT_CLIENT_SECRETS = DEFAULT_CONFIG_DIR / "credentials.json"
 DEFAULT_TOKEN_PATH = DEFAULT_CONFIG_DIR / "token.json"
 
 
+def authorize_prompt() -> str:
+    """A one-click link; the raw URL only where clicking is impossible anyway."""
+    link = hyperlink("Authorize gfunk in Google", "{url}")
+    return f"\nOpening your browser to sign in.\nIf nothing opens, visit:\n  {link}\n"
+
+
 class MissingClientSecretsError(Exception):
     """gfunk ships no credentials; the user registers their own GCP OAuth client."""
 
 
-def mount_up(
+def get_down(
     client_secrets: Path = DEFAULT_CLIENT_SECRETS,
     token_path: Path = DEFAULT_TOKEN_PATH,
     scopes: list[str] | None = None,
@@ -36,15 +46,16 @@ def mount_up(
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
     else:
-        if not client_secrets.exists():
-            message = (
-                f"No OAuth client secrets at {client_secrets}. Create a Desktop-app "
-                "OAuth client in your own Google Cloud project, download its JSON, and "
-                "save it there (or pass --client-secrets)."
-            )
-            raise MissingClientSecretsError(message)
+        kind = classify(client_secrets)
+        if kind != "installed":
+            raise MissingClientSecretsError(diagnose(kind, client_secrets))
         flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets), scopes)
-        creds = flow.run_local_server(port=0)
+        register_browser()
+        creds = flow.run_local_server(
+            port=0,
+            authorization_prompt_message=authorize_prompt(),
+            success_message="gfunk is signed in. Close this tab.",
+        )
 
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(creds.to_json())
