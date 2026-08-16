@@ -8,6 +8,9 @@ from gfunk.browser import hyperlink
 
 URL_IN_MESSAGE = re.compile(r"https://\S+?(?=[.\s]*$|\s)")
 
+UNAUTHORIZED = 401
+NOT_FOUND = 404
+
 
 def reason(exc: HttpError) -> str:
     details = getattr(exc, "error_details", None) or []
@@ -45,8 +48,8 @@ def explain(exc: HttpError) -> str:
             "Your cached token lacks the scopes gfunk needs.\n"
             "  rm ~/.config/gfunk/token.json && gfunk get-down"
         )
-    if status == 401:
+    if status == UNAUTHORIZED:
         return "Your sign-in is no longer valid. Run:\n  gfunk get-down"
-    if status == 404:
+    if status == NOT_FOUND:
         return f"Google says that does not exist (404):\n  {text}"
     return f"Google refused the request ({status}):\n  {text}"

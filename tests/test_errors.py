@@ -14,8 +14,8 @@ ENABLE_URL = (
 
 def http_error(status: int, message: str, reason: str = "") -> HttpError:
     body = (
-        '{"error": {"code": %d, "message": "%s", "errors": '
-        '[{"message": "%s", "reason": "%s"}]}}' % (status, message, message, reason)
+        f'{{"error": {{"code": {status}, "message": "{message}", "errors": '
+        f'[{{"message": "{message}", "reason": "{reason}"}}]}}}}'
     )
     resp = SimpleNamespace(status=status, reason="", get=lambda *_: None)
     return HttpError(resp, body.encode(), uri="u")

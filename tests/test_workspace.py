@@ -5,7 +5,7 @@ import pytest
 from conftest import build_drive, build_sheets
 
 from gfunk.cache import Cache
-from gfunk.workspace import Workspace, rows_to_dicts
+from gfunk.workspace import FOLDER_MIME, Workspace, rows_to_dicts
 
 
 def test_rows_to_dicts_uses_the_header_row() -> None:
@@ -135,3 +135,32 @@ def test_sharing_pages_until_the_limit_is_met() -> None:
     workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
 
     assert [f["id"] for f in workspace.sharing(limit=10)] == ["a", "b", "c"]
+
+
+def test_children_lists_one_folders_contents_folders_first() -> None:
+    drive = MagicMock()
+    drive.files.return_value.list.return_value.execute.return_value = {
+        "files": [{"id": "f", "name": "Reports", "mimeType": FOLDER_MIME}]
+    }
+    drive.files.return_value.list_next.return_value = None
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    found = workspace.children("folder-id", limit=10)
+
+    assert [f["id"] for f in found] == ["f"]
+    kwargs = drive.files.return_value.list.call_args.kwargs
+    assert kwargs["q"] == "'folder-id' in parents and trashed = false"
+    assert kwargs["orderBy"] == "folder,name"
+
+
+def test_children_escapes_the_folder_id_it_is_handed() -> None:
+    """A folder id reaches the query string, so it is an injection surface too."""
+    drive = MagicMock()
+    drive.files.return_value.list.return_value.execute.return_value = {"files": []}
+    drive.files.return_value.list_next.return_value = None
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    workspace.children("it's", limit=1)
+
+    kwargs = drive.files.return_value.list.call_args.kwargs
+    assert kwargs["q"] == "'it\\'s' in parents and trashed = false"

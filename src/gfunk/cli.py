@@ -60,18 +60,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     get_down.add_argument("--token", type=Path, help="Where to cache the token")
 
-    # "search" is the word a new user types blind; "snoop" is the one we mean.
+    # "browse" is the word a new user types blind; "snoop" is the one we mean.
     snoop = sub.add_parser(
-        "snoop", aliases=["search"], help="Search Drive by file name"
+        "snoop",
+        aliases=["browse", "search"],
+        help="Walk your Drive folders like directories",
     )
-    snoop.add_argument("term", nargs="?", help="What to search for")
-    snoop.add_argument("--limit", type=int, default=50)
     snoop.add_argument(
-        "--browse",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Pick a result with fzf and open it (default: when interactive)",
+        "folder", nargs="?", help="Folder id to start in (default: root)"
     )
+    snoop.add_argument("--limit", type=int, default=200)
 
     sample = sub.add_parser("sample", help="Pull rows from a spreadsheet range")
     sample.add_argument("spreadsheet_id", nargs="?")
@@ -85,7 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
     mix.add_argument("--limit", type=int, default=None)
 
     regulate = sub.add_parser(
-        "regulate", help="Audit who can reach the Drive files you own"
+        "regulate",
+        aliases=["audit"],
+        help="Audit who can reach the Drive files you own",
     )
     regulate.add_argument("--limit", type=int, default=200)
     regulate.add_argument(
@@ -318,18 +318,21 @@ def pick(found: list[dict[str, Any]], header: str) -> dict[str, Any] | None:
     return labels[chosen] if chosen is not None else None
 
 
-def browse(found: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Pick a hit and open it where the human can read it: their browser."""
+def open_in_browser(item: dict[str, Any]) -> None:
     from gfunk.browser import register as register_browser
-
-    item = pick(found, "Open which in your browser?")
-    if item is None:
-        return None
 
     link = item.get("webViewLink") or f"https://drive.google.com/open?id={item['id']}"
     register_browser()
     if not webbrowser.open(link):
         print(f"Could not open a browser. The link is:\n  {link}", file=sys.stderr)
+
+
+def browse(found: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Pick a hit and open it where the human can read it: their browser."""
+    item = pick(found, "Open which in your browser?")
+    if item is None:
+        return None
+    open_in_browser(item)
     return item
 
 
@@ -339,46 +342,89 @@ def can_browse() -> bool:
     return sys.stdin.isatty() and which("fzf") is not None
 
 
+UP = "../"
+
+
+def is_folder(item: dict[str, Any]) -> bool:
+    from gfunk.workspace import FOLDER_MIME
+
+    return bool(item.get("mimeType") == FOLDER_MIME)
+
+
+def _natural_key(name: str) -> list[int | str]:
+    """Split a string into text/number chunks for natural sort order."""
+    import re
+
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", name)]
+
+
+def _fmt_date(iso: str) -> str:
+    """'2024-06-15T10:30:00.000Z' → '2024-06-15'."""
+    return iso[:10] if iso else ""
+
+
+def snoop_entries(
+    items: list[dict[str, Any]], *, up: bool
+) -> dict[str, dict[str, Any] | None]:
+    """Label every child the way `ls` would: a trailing slash means you can enter it."""
+    entries: dict[str, dict[str, Any] | None] = {UP: None} if up else {}
+    sorted_items = sorted(items, key=lambda i: _natural_key(i.get("name", "")))
+    if not sorted_items:
+        return entries
+    max_name = max(
+        len(i.get("name", "")) + (1 if is_folder(i) else 0) for i in sorted_items
+    )
+    for item in sorted_items:
+        slash = "/" if is_folder(item) else ""
+        name = f"{item['name']}{slash}"
+        created = _fmt_date(item.get("createdTime", ""))
+        modified = _fmt_date(item.get("modifiedTime", ""))
+        label = f"{name:<{max_name}}  created {created}  modified {modified}"
+        entries[label] = item
+    return entries
+
+
 def cmd_snoop(args: argparse.Namespace) -> int:
+    """Walk Drive like a filesystem: descend into folders, escape to climb back."""
     from gfunk.workspace import Workspace
 
-    # No term and a human at the keyboard: browse the newest files and filter in fzf,
-    # rather than demanding a search term for files they have not named yet.
-    browsing = not args.term and args.browse is not False and can_browse()
-
-    # Resolve arguments before authenticating: a missing one should not cost a login.
-    term = (
-        None
-        if browsing
-        else (args.term or prompt_required("Search Drive for: ", "a search term"))
-    )
     with status("Signing in to Google"):
         workspace = Workspace.connect()
 
-    if browsing:
-        print(
-            "No search term given, so: pick from your newest Drive files.",
-            file=sys.stderr,
+    root = args.folder or "root"
+    stack: list[tuple[str, str]] = [(root, "My Drive" if root == "root" else root)]
+
+    if not can_browse():
+        listing = workspace.children(root, limit=args.limit)
+        return emit(listing, f"gfunk snoop {quote(root)} --limit {args.limit}")
+
+    while stack:
+        folder_id, _ = stack[-1]
+        path = "/".join(name for _, name in stack)
+        with status(f"Listing {path}"):
+            items = workspace.children(folder_id, limit=args.limit)
+
+        entries = snoop_entries(items, up=len(stack) > 1)
+        chosen = fzf_pick(
+            list(entries),
+            f"{path} — enter opens, esc goes up",
+            abort_ok=True,
         )
-        with status(f"Fetching your {args.limit} newest Drive files"):
-            found = workspace.recent(limit=args.limit)
-        if not found:
-            print("Drive returned nothing to browse.", file=sys.stderr)
-            return 1
-        item = browse(found)
-        if item is None:
-            return 0
-        return emit(item, f"gfunk snoop {quote(item['name'])} --limit {args.limit}")
 
-    assert term is not None
-    with status(f"Searching Drive for {quote(term)}"):
-        found = workspace.snoop(term, limit=args.limit)
-    code = emit(found, f"gfunk snoop {quote(term)} --limit {args.limit}")
+        if chosen is None or chosen == UP:
+            stack.pop()
+            continue
 
-    wants = args.browse if args.browse is not None else can_browse()
-    if wants and found:
-        browse(found)
-    return code
+        item = entries[chosen]
+        assert item is not None
+        if is_folder(item):
+            stack.append((item["id"], item["name"]))
+            continue
+
+        open_in_browser(item)
+        return emit(item, f"gfunk snoop {quote(folder_id)} --limit {args.limit}")
+
+    return 0
 
 
 def cmd_sample(args: argparse.Namespace) -> int:
@@ -428,6 +474,26 @@ EXPOSURE_LABELS = {
 }
 
 
+def _resolve_folders(
+    files: list[dict[str, Any]],
+    workspace: Any,
+) -> tuple[dict[str, str], dict[str, str]]:
+    parent_ids: set[str] = set()
+    file_parents: dict[str, str] = {}
+    for f in files:
+        parents = f.get("parents", [])
+        if parents:
+            parent_ids.add(parents[0])
+            file_parents[f["id"]] = parents[0]
+
+    if parent_ids:
+        with status("Resolving folder names"):
+            folder_names = workspace.folder_names(parent_ids)
+    else:
+        folder_names = {}
+    return file_parents, folder_names
+
+
 def cmd_regulate(args: argparse.Namespace) -> int:
     from gfunk.regulate import audit, summarise
     from gfunk.workspace import Workspace
@@ -438,8 +504,12 @@ def cmd_regulate(args: argparse.Namespace) -> int:
         files = workspace.sharing(limit=args.limit)
 
     rows = audit(files, shared_only=not args.all)
+    file_parents, folder_names = _resolve_folders(files, workspace)
 
     if args.json:
+        for row in rows:
+            pid = file_parents.get(row["id"])
+            row["folder"] = folder_names.get(pid, "") if pid else ""
         return emit(rows, f"gfunk regulate --limit {args.limit} --json")
 
     if not rows:
@@ -448,7 +518,10 @@ def cmd_regulate(args: argparse.Namespace) -> int:
 
     for row in rows:
         label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
-        print(f"{label}  {row['name']}")
+        pid = file_parents.get(row["id"])
+        folder = folder_names.get(pid, "") if pid else ""
+        path = f"{folder}/{row['name']}" if folder else row["name"]
+        print(f"{label}  {path}")
         for reach in row["reached_by"]:
             print(f"            └─ {reach}")
         if row["link"]:
@@ -458,7 +531,43 @@ def cmd_regulate(args: argparse.Namespace) -> int:
     tally = ", ".join(f"{count} {level}" for level, count in counts.items() if count)
     print(f"\n{tally or 'nothing shared'} — out of {len(files)} files you own.")
     print("\nRun again with:\n  gfunk regulate", file=sys.stderr)
+
+    if can_browse() and rows:
+        regulate_pick(rows)
+
     return 0
+
+
+REGULATE_ACTIONS = ["Open in browser", "Move", "Delete", "Change permissions"]
+WRITE_ACTIONS = frozenset({"Move", "Delete", "Change permissions"})
+
+
+def regulate_pick(rows: list[dict[str, Any]]) -> None:
+    labels: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
+        labels[f"{label}  {row['name']}"] = row
+
+    chosen = fzf_pick(list(labels), "Pick a file to act on", abort_ok=True)
+    if chosen is None:
+        return
+
+    row = labels[chosen]
+    action = fzf_pick(REGULATE_ACTIONS, row["name"], abort_ok=True)
+    if action is None:
+        return
+
+    if action == "Open in browser":
+        open_in_browser(row)
+        return
+
+    if action in WRITE_ACTIONS:
+        print(
+            f"{action} requires write scopes. Re-authenticate with:\n"
+            f"  gfunk get-down --write",
+            file=sys.stderr,
+        )
+        return
 
 
 COMMANDS = {
@@ -467,10 +576,12 @@ COMMANDS = {
     "get-down": cmd_get_down,
     "login": cmd_get_down,
     "snoop": cmd_snoop,
+    "browse": cmd_snoop,
     "search": cmd_snoop,
     "sample": cmd_sample,
     "mix": cmd_mix,
     "regulate": cmd_regulate,
+    "audit": cmd_regulate,
     "mothership": cmd_mothership,
 }
 

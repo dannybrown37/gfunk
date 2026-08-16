@@ -6,17 +6,20 @@ Everything here is read-only, matching the scopes `get-down` requests.
 from typing import Any
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from gfunk.auth import get_down
 from gfunk.cache import Cache
 
 DRIVE_FIELDS = (
-    "nextPageToken, files(id, name, mimeType, modifiedTime, webViewLink, "
+    "nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, webViewLink, "
     "owners(emailAddress))"
 )
 
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
 SHARING_FIELDS = (
-    "nextPageToken, files(id, name, webViewLink, owners(emailAddress), "
+    "nextPageToken, files(id, name, webViewLink, parents, owners(emailAddress), "
     "permissions(id, type, role, emailAddress, domain, allowFileDiscovery))"
 )
 
@@ -89,6 +92,31 @@ class Workspace:
         self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
         return found
 
+    def children(
+        self, folder_id: str = "root", limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """One folder's contents, folders first — the unit a directory walk needs."""
+        query = f"'{escape_drive_query(folder_id)}' in parents and trashed = false"
+        request = self.drive.files().list(
+            q=query,
+            orderBy="folder,name",
+            fields=DRIVE_FIELDS,
+            pageSize=min(limit, 100),
+        )
+
+        found: list[dict[str, Any]] = []
+        while request is not None and len(found) < limit:
+            response = request.execute()
+            page = response.get("files", [])
+            if not page:
+                break  # an empty page cannot become a full one; stop asking
+            found.extend(page)
+            request = self.drive.files().list_next(request, response)
+
+        found = found[:limit]
+        self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
+        return found
+
     def sharing(self, limit: int = 200) -> list[dict[str, Any]]:
         """Files you own, with their permissions, for the exposure audit.
 
@@ -111,6 +139,22 @@ class Workspace:
         found = found[:limit]
         self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
         return found
+
+    def folder_names(self, folder_ids: set[str]) -> dict[str, str]:
+        """Resolve folder IDs to names in a single batch."""
+        if not folder_ids:
+            return {}
+        names: dict[str, str] = {}
+        for fid in folder_ids:
+            if fid == "root":
+                names[fid] = "My Drive"
+                continue
+            try:
+                meta = self.drive.files().get(fileId=fid, fields="name").execute()
+                names[fid] = meta.get("name", fid)
+            except HttpError:
+                names[fid] = fid
+        return names
 
     def sample(
         self, spreadsheet_id: str, cell_range: str, limit: int | None = None

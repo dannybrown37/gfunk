@@ -140,6 +140,8 @@ gfunk/
 |   |-- test_cache.py
 |   |-- test_cli.py
 |   |-- test_cli_mount_up.py
+|   |-- test_cli_regulate.py
+|   |-- test_cli_roll.py
 |   |-- test_errors.py
 |   |-- test_mothership.py
 |   |-- test_regulate.py
