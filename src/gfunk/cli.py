@@ -85,16 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     dig = sub.add_parser(
         "dig",
         aliases=["open"],
-        help="Open a Doc in your browser, or show the tail of a spreadsheet",
+        help="Open a Drive file in your browser",
     )
     dig.add_argument("file_id", nargs="?", help="Drive file id")
-    dig.add_argument(
-        "--rows",
-        type=int,
-        default=20,
-        help="How many rows from the bottom to show (sheets only)",
-    )
-    dig.add_argument("--json", action="store_true", help="Emit JSON instead of a table")
 
     regulate = sub.add_parser(
         "regulate",
@@ -488,7 +481,7 @@ def pick_file(workspace: Any) -> dict[str, Any] | None:
 
 
 def cmd_dig(args: argparse.Namespace) -> int:
-    from gfunk.workspace import SHEET_MIME, Workspace
+    from gfunk.workspace import Workspace
 
     with status("Signing in to Google"):
         workspace = Workspace.connect()
@@ -507,28 +500,7 @@ def cmd_dig(args: argparse.Namespace) -> int:
         with status("Reading file metadata"):
             file_meta = workspace.file_meta(file_id)
 
-    mime = file_meta.get("mimeType", "")
     name = file_meta.get("name", file_id)
-
-    if mime == SHEET_MIME:
-        with status(f"Reading tabs of {name}"):
-            tabs = workspace.sheet_tabs(file_id)
-        if not tabs:
-            print("No tabs found.", file=sys.stderr)
-            return 1
-        tab = tabs[0]
-        if len(tabs) > 1 and can_browse():
-            picked = fzf_pick(tabs, "Which tab?", abort_ok=True)
-            if picked:
-                tab = picked
-        with status(f"Reading {name} / {tab}"):
-            rows = workspace.sample(file_id, tab)
-        tail = rows[-args.rows :] if len(rows) > args.rows else rows
-        replay = f"gfunk dig {quote(file_id)} --rows {args.rows}"
-        if args.json:
-            return emit(tail, replay + " --json")
-        return emit_table(tail, replay)
-
     open_in_browser(file_meta)
     print(f"Opened {name} in your browser.", file=sys.stderr)
     return emit(

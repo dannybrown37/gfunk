@@ -8,7 +8,7 @@ from gfunk.workspace import DOC_MIME, SHEET_MIME
 
 
 def dig_args(**overrides: object) -> argparse.Namespace:
-    defaults: dict[str, object] = {"file_id": None, "rows": 20, "json": False}
+    defaults: dict[str, object] = {"file_id": None}
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -27,49 +27,7 @@ DOC_FILE = {
 }
 
 
-def test_dig_sheet_shows_tail_rows_as_table(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    workspace = MagicMock()
-    workspace.file_meta.return_value = SHEET_FILE
-    workspace.sheet_tabs.return_value = ["Sheet1"]
-    workspace.sample.return_value = [{"A": str(i)} for i in range(50)]
-
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert cmd_dig(dig_args(file_id="s1")) == 0
-
-    out = capsys.readouterr()
-    assert "30" in out.out
-    assert "49" in out.out
-
-
-def test_dig_sheet_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
-    workspace = MagicMock()
-    workspace.file_meta.return_value = SHEET_FILE
-    workspace.sheet_tabs.return_value = ["Sheet1"]
-    workspace.sample.return_value = [{"A": str(i)} for i in range(5)]
-
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert cmd_dig(dig_args(file_id="s1", json=True)) == 0
-
-    out = capsys.readouterr()
-    assert '"A": "0"' in out.out
-
-
-def test_dig_sheet_custom_rows(capsys: pytest.CaptureFixture[str]) -> None:
-    workspace = MagicMock()
-    workspace.file_meta.return_value = SHEET_FILE
-    workspace.sheet_tabs.return_value = ["Sheet1"]
-    workspace.sample.return_value = [{"A": str(i)} for i in range(10)]
-
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert cmd_dig(dig_args(file_id="s1", rows=5)) == 0
-
-    out = capsys.readouterr()
-    assert "5" in out.out
-
-
-def test_dig_doc_opens_browser() -> None:
+def test_dig_opens_file_in_browser() -> None:
     workspace = MagicMock()
     workspace.file_meta.return_value = DOC_FILE
 
@@ -80,6 +38,19 @@ def test_dig_doc_opens_browser() -> None:
         assert cmd_dig(dig_args(file_id="d1")) == 0
 
     opened.assert_called_once_with(DOC_FILE)
+
+
+def test_dig_opens_sheets_in_browser_too() -> None:
+    workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
+
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.open_in_browser") as opened,
+    ):
+        assert cmd_dig(dig_args(file_id="s1")) == 0
+
+    opened.assert_called_once_with(SHEET_FILE)
 
 
 def test_dig_echoes_replayable_command(capsys: pytest.CaptureFixture[str]) -> None:
@@ -105,9 +76,6 @@ def test_dig_picks_file_via_fzf_when_no_id(
 ) -> None:
     workspace = MagicMock()
     workspace.recent.return_value = [file_meta]
-    workspace.file_meta.return_value = file_meta
-    workspace.sheet_tabs.return_value = ["Sheet1"]
-    workspace.sample.return_value = [{"A": "1"}]
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
@@ -116,6 +84,8 @@ def test_dig_picks_file_via_fzf_when_no_id(
             "gfunk.cli.fzf_pick",
             return_value=f"{file_meta['name']}\t{file_meta['id']}",
         ),
-        patch("gfunk.cli.open_in_browser"),
+        patch("gfunk.cli.open_in_browser") as opened,
     ):
         assert cmd_dig(dig_args()) == 0
+
+    opened.assert_called_once()

@@ -90,7 +90,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | Command | What it does |
 |---|---|
 | `gfunk snoop` | Browse Drive folders like directories |
-| `gfunk dig` | Open a Doc in your browser, or show the tail of a spreadsheet |
+| `gfunk dig` | Open a Drive file in your browser |
 | `gfunk sample` | Pull rows from a spreadsheet as a table |
 | `gfunk bounce` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `gfunk hook` | Webhooks / event triggers |

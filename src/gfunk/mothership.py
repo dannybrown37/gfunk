@@ -62,18 +62,8 @@ def build_server(
 
     @server.tool(name=f"{TOOL_PREFIX}dig")
     def dig(file_id: str) -> dict[str, Any]:
-        """Get metadata for a Drive file. For spreadsheets, includes the tail rows."""
-        ws = connect()
-        meta = ws.file_meta(file_id)
-        from gfunk.workspace import SHEET_MIME
-
-        if meta.get("mimeType") == SHEET_MIME:
-            tabs = ws.sheet_tabs(file_id)
-            tab = tabs[0] if tabs else "Sheet1"
-            rows = ws.sample(file_id, tab)
-            meta["tail_rows"] = rows[-20:]
-            meta["total_rows"] = len(rows)
-        return meta
+        """Get metadata and webViewLink for a Drive file."""
+        return connect().file_meta(file_id)
 
     return server
 
