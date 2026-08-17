@@ -52,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     snoop = sub.add_parser(
         "snoop",
         aliases=["browse"],
-        help="Walk your Drive folders like directories",
+        help="Walk your Drive folders — open or move files",
     )
     snoop.add_argument(
         "folder", nargs="?", help="Folder id to start in (default: root)"
@@ -151,14 +151,6 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         help="'runs', 'triggers', or a script id to open directly",
     )
-
-    slide = sub.add_parser(
-        "slide",
-        aliases=["move"],
-        help="Move a file to a different folder",
-    )
-    slide.add_argument("file_id", nargs="?", help="Drive file id")
-    slide.add_argument("destination", nargs="?", help="Destination folder id")
 
     mothership = sub.add_parser(
         "mothership",
@@ -516,9 +508,36 @@ def cmd_snoop(args: argparse.Namespace) -> int:
             stack.append((item["id"], item["name"]))
             continue
 
-        open_in_browser(item)
-        return emit(item, f"gfunk snoop {quote(folder_id)} --limit {args.limit}")
+        action = fzf_pick(SNOOP_ACTIONS, item["name"], abort_ok=True)
+        if action is None or action == "Open in browser":
+            open_in_browser(item)
+            return emit(item, f"gfunk snoop {quote(folder_id)} --limit {args.limit}")
+        if action == "Move":
+            return _snoop_move(workspace, item)
 
+    return 0
+
+
+SNOOP_ACTIONS = ["Open in browser", "Move"]
+
+
+def _snoop_move(workspace: Any, file_meta: dict[str, Any]) -> int:
+    file_id = file_meta["id"]
+    name = file_meta.get("name", file_id)
+    parents = file_meta.get("parents", [])
+    current_parent = parents[0] if parents else "root"
+
+    parent_names = workspace.folder_names({current_parent})
+    current_folder_name = parent_names.get(current_parent, current_parent)
+    print(f"Moving {name} (currently in {current_folder_name})", file=sys.stderr)
+
+    result = pick_destination(workspace)
+    if result is None:
+        return 0
+    destination, dest_name = result
+
+    workspace.move(file_id, add_parent=destination, remove_parent=current_parent)
+    print(f"Moved {name} → {dest_name}", file=sys.stderr)
     return 0
 
 
@@ -972,39 +991,6 @@ def regulate_pick(rows: list[dict[str, Any]]) -> None:
         return
 
 
-def pick_file_snoop(workspace: Any, start: str = "root") -> dict[str, Any] | None:
-    """Snoop-style browser that returns the picked file's metadata, or None."""
-    stack: list[tuple[str, str]] = [(start, "My Drive" if start == "root" else start)]
-
-    while stack:
-        folder_id, _ = stack[-1]
-        path = "/".join(name for _, name in stack)
-        with status(f"Listing {path}"):
-            items = workspace.children(folder_id, limit=200)
-
-        entries = snoop_entries(items, up=len(stack) > 1)
-
-        chosen = fzf_pick(
-            list(entries),
-            f"{path} — pick a file to move, enter folders to browse",
-            abort_ok=True,
-        )
-
-        if chosen is None or chosen == UP:
-            stack.pop()
-            continue
-
-        item = entries[chosen]
-        assert item is not None
-        if is_folder(item):
-            stack.append((item["id"], item["name"]))
-            continue
-
-        return item
-
-    return None
-
-
 SELECT_HERE = ">> Move here <<"
 
 
@@ -1117,59 +1103,6 @@ def cmd_dj(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_slide(args: argparse.Namespace) -> int:
-    from gfunk.workspace import Workspace
-
-    with status("Signing in to Google"):
-        workspace = Workspace.connect()
-
-    file_id = args.file_id
-    file_meta = None
-
-    if not file_id:
-        if can_browse():
-            file_meta = pick_file_snoop(workspace)
-        else:
-            file_id = prompt_required("File id: ", "file_id")
-        if not file_id and not file_meta:
-            return 0
-
-    if file_meta:
-        file_id = file_meta["id"]
-    else:
-        with status("Reading file metadata"):
-            file_meta = workspace.file_meta(file_id)
-
-    name = file_meta.get("name", file_id)
-    parents = file_meta.get("parents", [])
-    current_parent = parents[0] if parents else "root"
-
-    parent_names = workspace.folder_names({current_parent})
-    current_folder_name = parent_names.get(current_parent, current_parent)
-    print(f"Moving {name} (currently in {current_folder_name})", file=sys.stderr)
-
-    destination = args.destination
-    dest_name = None
-
-    if destination:
-        dest_names = workspace.folder_names({destination})
-        dest_name = dest_names.get(destination, destination)
-    elif can_browse():
-        result = pick_destination(workspace)
-        if result is None:
-            return 0
-        destination, dest_name = result
-    else:
-        destination = prompt_required("Destination folder id: ", "destination")
-
-    workspace.move(file_id, add_parent=destination, remove_parent=current_parent)
-    dest_label = dest_name or destination
-    print(f"Moved {name} → {dest_label}", file=sys.stderr)
-    replay = f"gfunk slide {quote(file_id)} {quote(destination)}"
-    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
-    return 0
-
-
 COMMANDS = {
     "mount-up": cmd_mount_up,
     "setup": cmd_mount_up,
@@ -1189,8 +1122,6 @@ COMMANDS = {
     "audit": cmd_regulate,
     "dj": cmd_dj,
     "scripts": cmd_dj,
-    "slide": cmd_slide,
-    "move": cmd_slide,
     "mothership": cmd_mothership,
     "mcp": cmd_mothership,
 }

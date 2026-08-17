@@ -53,7 +53,6 @@ gfunk dig <file-id>                         # open a Drive file in your browser
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk regulate                              # audit who can see your files
 gfunk dj                                    # open Apps Script dashboard
-gfunk slide <file-id>                       # move a file to another folder
 gfunk mothership                            # start the MCP server on stdio
 ```
 
@@ -100,7 +99,6 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dj` | `scripts` | Open Apps Script dashboard, triggers, or runs |
-| `slide` | `move` | Move a file to another folder |
 | `mothership` | `mcp` | Start the MCP server on stdio |
 
 ## Development
@@ -153,7 +151,7 @@ gfunk/
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
-|   |-- test_cli_slide.py
+|   |-- test_cli_snoop_move.py
 |   |-- test_cli_vibe.py
 |   |-- test_errors.py
 |   |-- test_mcp_config.py
