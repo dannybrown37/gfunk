@@ -136,6 +136,7 @@ gfunk/
 |       |-- mcp_config.py
 |       |-- mothership.py
 |       |-- regulate.py
+|       |-- vibe.py
 |       `-- workspace.py
 |-- tests/
 |   |-- conftest.py
@@ -153,6 +154,7 @@ gfunk/
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
 |   |-- test_cli_slide.py
+|   |-- test_cli_vibe.py
 |   |-- test_errors.py
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gfunk.cli import cmd_sample, pick_spreadsheet, pick_range
+from gfunk.cli import cmd_vibe, pick_spreadsheet, pick_range
 
 
 def sample_args(**overrides: object) -> argparse.Namespace:
@@ -12,6 +12,7 @@ def sample_args(**overrides: object) -> argparse.Namespace:
         "cell_range": None,
         "limit": None,
         "json": False,
+        "raw": True,
     }
     return argparse.Namespace(**{**defaults, **overrides})
 
@@ -26,7 +27,7 @@ def test_sample_with_args_skips_pickers(
     workspace.sample.return_value = [{"A": "1"}]
 
     with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert cmd_sample(sample_args(spreadsheet_id="s1", cell_range="Sheet1")) == 0
+        assert cmd_vibe(sample_args(spreadsheet_id="s1", cell_range="Sheet1")) == 0
 
     workspace.sample.assert_called_once_with("s1", "Sheet1", limit=None)
     assert "A" in capsys.readouterr().out
@@ -38,7 +39,7 @@ def test_sample_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
 
     with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
         assert (
-            cmd_sample(sample_args(spreadsheet_id="s1", cell_range="Sheet1", json=True))
+            cmd_vibe(sample_args(spreadsheet_id="s1", cell_range="Sheet1", json=True))
             == 0
         )
 
@@ -91,6 +92,6 @@ def test_sample_echoes_replayable_command(
     workspace.sample.return_value = []
 
     with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        cmd_sample(sample_args(spreadsheet_id="s1", cell_range="A1:B2"))
+        cmd_vibe(sample_args(spreadsheet_id="s1", cell_range="A1:B2"))
 
-    assert "gfunk sample" in capsys.readouterr().err
+    assert "gfunk vibe" in capsys.readouterr().err

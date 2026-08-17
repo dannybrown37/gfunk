@@ -9,6 +9,7 @@ dependencies = [
     "google-auth-oauthlib>=1.4.0",
     "mcp>=2.0.0",
     "tabulate>=0.10.0",
+    "textual>=3.0.0",
 ]
 
 [project.scripts]

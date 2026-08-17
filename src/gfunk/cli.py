@@ -59,18 +59,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     snoop.add_argument("--limit", type=int, default=200)
 
-    # "sheet" is the word a new user types blind; "sample" is the one we mean.
-    sample = sub.add_parser(
-        "sample",
-        aliases=["sheet"],
-        help="Print a spreadsheet or a range of cells, --json option",
+    # "sheet"/"sample" are aliases; "vibe" is the one we mean.
+    vibe = sub.add_parser(
+        "vibe",
+        aliases=["sample", "sheet"],
+        help="Interactive spreadsheet viewer — sort, filter, search",
     )
-    sample.add_argument("spreadsheet_id", nargs="?")
-    sample.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
-    sample.add_argument("--limit", type=int, default=None)
-    sample.add_argument(
+    vibe.add_argument("spreadsheet_id", nargs="?")
+    vibe.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
+    vibe.add_argument("--limit", type=int, default=None)
+    vibe.add_argument(
         "--json", action="store_true", help="Emit JSON instead of a table"
     )
+    vibe.add_argument("--raw", action="store_true", help="Plain table output (no TUI)")
 
     dig = sub.add_parser(
         "dig",
@@ -596,7 +597,7 @@ def pick_range(workspace: Any, spreadsheet_id: str) -> str | None:
     return fzf_pick(tabs, "Pick a tab", abort_ok=True)
 
 
-def cmd_sample(args: argparse.Namespace) -> int:
+def cmd_vibe(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
     with status("Signing in to Google"):
@@ -616,10 +617,17 @@ def cmd_sample(args: argparse.Namespace) -> int:
 
     with status("Pulling rows"):
         rows = workspace.sample(sheet, cell_range, limit=args.limit)
-    replay = f"gfunk sample {quote(sheet)} {quote(cell_range)}"
+    replay = f"gfunk vibe {quote(sheet)} {quote(cell_range)}"
     if args.json:
         return emit(rows, replay + " --json")
-    return emit_table(rows, replay)
+    if args.raw or not sys.stdin.isatty():
+        return emit_table(rows, replay + " --raw")
+
+    from gfunk.vibe import VibeApp
+
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    VibeApp(rows).run()
+    return 0
 
 
 def _default_format(mime: str) -> str:
@@ -1170,8 +1178,9 @@ COMMANDS = {
     "browse": cmd_snoop,
     "dig": cmd_dig,
     "open": cmd_dig,
-    "sample": cmd_sample,
-    "sheet": cmd_sample,
+    "vibe": cmd_vibe,
+    "sample": cmd_vibe,
+    "sheet": cmd_vibe,
     "peep": cmd_peep,
     "read": cmd_peep,
     "bounce": cmd_bounce,
