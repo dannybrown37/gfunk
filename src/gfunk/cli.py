@@ -1345,7 +1345,7 @@ def cmd_dj(args: argparse.Namespace) -> int:
             "List Projects        Your scripts in a table": "list",
             "My Projects          All your Apps Script projects (browser)": "home",
             "Recent Runs          What ran, what failed, and when": "runs",
-            "My Triggers          What's scheduled, what's firing": "triggers",
+            "My Triggers          What's scheduled, what's firing (browser)": "triggers",
         }
         chosen = fzf_pick(list(pages), "Apps Script — pick a page", abort_ok=True)
         if chosen is None:
