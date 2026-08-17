@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     vibe = sub.add_parser(
         "vibe",
         aliases=["sample", "sheet"],
-        help="Interactive spreadsheet viewer — sort, filter, search",
+        help="Interactive spreadsheet viewer — filter and search",
     )
     vibe.add_argument("spreadsheet_id", nargs="?")
     vibe.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     dig = sub.add_parser(
         "dig",
         aliases=["open"],
-        help="Open a Drive file in your browser",
+        help="Pick a recent Drive file and open it in your browser",
     )
     dig.add_argument("file_id", nargs="?", help="Drive file id")
 
