@@ -124,7 +124,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sheet tab name (defaults to first tab)",
     )
 
-    sub.add_parser("mothership", aliases=["mcp"], help="Start the MCP server on stdio")
+    mothership = sub.add_parser(
+        "mothership",
+        aliases=["mcp"],
+        help="MCP server — install into clients or serve over stdio",
+    )
+    ms_sub = mothership.add_subparsers(dest="mothership_command", metavar="<action>")
+
+    install = ms_sub.add_parser(
+        "install",
+        help="Add gfunk to a client's MCP config",
+    )
+    install.add_argument(
+        "--client",
+        choices=["claude", "copilot", "all"],
+        default="all",
+        help="Which client to configure (default: all)",
+    )
+    install.add_argument(
+        "--global",
+        dest="global_scope",
+        action="store_true",
+        help="Write to user-level config instead of project-level",
+    )
+    install.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Remove gfunk from the client config",
+    )
+
+    ms_sub.add_parser("serve", help="Start the MCP server on stdio")
     return parser
 
 
@@ -647,20 +676,46 @@ def cmd_bounce(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_mothership(_: argparse.Namespace) -> int:
+def cmd_mothership(args: argparse.Namespace) -> int:
+    action = getattr(args, "mothership_command", None)
+    if action is None:
+        build_parser().parse_args(["mothership", "--help"])
+        return 0
+    if action == "install":
+        return _mothership_install(args)
+    return _mothership_serve()
+
+
+def _mothership_install(args: argparse.Namespace) -> int:
+    from gfunk.mcp_config import install, uninstall
+
+    root = Path.cwd()
+    fn = uninstall if args.uninstall else install
+    paths = fn(root, client=args.client, global_scope=args.global_scope)
+    verb = "Removed from" if args.uninstall else "Installed to"
+    if not paths:
+        print("Nothing to do — gfunk is not installed in those configs.")
+        return 0
+    for p in paths:
+        print(f"{verb}: {p}")
+
+    if not args.uninstall:
+        flags = f" --client {args.client}" if args.client != "all" else ""
+        if args.global_scope:
+            flags += " --global"
+        print(f"\nRun again with:\n  gfunk mothership install{flags}")
+        print(f"Uninstall with:\n  gfunk mothership install --uninstall{flags}")
+    return 0
+
+
+def _mothership_serve() -> int:
     from gfunk.mothership import run
 
     if sys.stdin.isatty():
         print(
-            "mothership is an MCP server — it speaks JSON-RPC over stdio,\n"
-            "not meant to be run directly in a terminal.\n"
-            "\n"
-            "Configure it as an MCP server in your client:\n"
-            '  { "command": "uv", "args": ["run", "--project", '
-            '"/path/to/gfunk", "gfunk", "mothership"] }\n'
-            "\n"
-            "Or pipe JSON-RPC to it:\n"
-            "  echo '{}' | gfunk mothership",
+            "mothership serve speaks JSON-RPC over stdio — not meant for\n"
+            "direct use. Install it into a client instead:\n"
+            "  gfunk mothership install",
             file=sys.stderr,
         )
         return 1

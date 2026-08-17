@@ -115,10 +115,14 @@ pre-commit install
 
 ```
 gfunk/
+|-- .claude/
+|   `-- settings.json
 |-- .github/
 |   |-- workflows/
 |   |   `-- ci.yml
 |   `-- dependabot.yml
+|-- .vscode/
+|   `-- mcp.json
 |-- src/
 |   `-- gfunk/
 |       |-- __init__.py
@@ -129,6 +133,7 @@ gfunk/
 |       |-- cache.py
 |       |-- cli.py
 |       |-- errors.py
+|       |-- mcp_config.py
 |       |-- mothership.py
 |       |-- regulate.py
 |       `-- workspace.py
@@ -146,6 +151,7 @@ gfunk/
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
 |   |-- test_errors.py
+|   |-- test_mcp_config.py
 |   |-- test_mothership.py
 |   |-- test_regulate.py
 |   `-- test_workspace.py

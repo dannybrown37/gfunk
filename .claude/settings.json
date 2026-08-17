@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gfunk": {
+      "command": "gfunk",
+      "args": [
+        "mothership"
+      ]
+    }
+  }
+}

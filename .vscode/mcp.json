@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "gfunk": {
+      "command": "gfunk",
+      "args": [
+        "mothership"
+      ],
+      "type": "stdio"
+    }
+  }
+}
