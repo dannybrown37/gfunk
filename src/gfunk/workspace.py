@@ -21,6 +21,9 @@ SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 DOC_MIME = "application/vnd.google-apps.document"
 SCRIPT_MIME = "application/vnd.google-apps.script"
 
+SCRIPT_TYPE_EXTENSIONS = {"SERVER_JS": ".gs", "HTML": ".html", "JSON": ".json"}
+SCRIPT_EXTENSION_TYPES = {ext: type_ for type_, ext in SCRIPT_TYPE_EXTENSIONS.items()}
+
 EXPORT_MIME_MAP: dict[str, dict[str, str]] = {
     SHEET_MIME: {
         "csv": "text/csv",
@@ -46,6 +49,31 @@ SHARING_FIELDS = (
 def escape_drive_query(term: str) -> str:
     """Escape a term for Drive's `q` syntax, which is its own injection surface."""
     return term.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def write_script_files(files: list[dict[str, Any]], out_dir: Path) -> list[Path]:
+    """Write Apps Script source files to a local directory."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for f in files:
+        ext = SCRIPT_TYPE_EXTENSIONS.get(f.get("type", ""), "")
+        path = out_dir / f"{f['name']}{ext}"
+        path.write_text(f.get("source", ""))
+        written.append(path)
+    return written
+
+
+def read_script_files(in_dir: Path) -> list[dict[str, Any]]:
+    """Read a local directory back into Apps Script API file format."""
+    files = []
+    for path in sorted(in_dir.iterdir()):
+        script_type = SCRIPT_EXTENSION_TYPES.get(path.suffix)
+        if script_type is None:
+            continue
+        files.append(
+            {"name": path.stem, "type": script_type, "source": path.read_text()}
+        )
+    return files
 
 
 def rows_to_dicts(rows: list[list[str]]) -> list[dict[str, str]]:
@@ -229,6 +257,21 @@ class Workspace:
             .execute()
         )
         return list(response.get("files", [])[:limit])
+
+    def script_content(self, script_id: str) -> list[dict[str, Any]]:
+        """Source files for an Apps Script project."""
+        response = self.script.projects().getContent(scriptId=script_id).execute()
+        return list(response.get("files", []))
+
+    def update_script_content(
+        self, script_id: str, files: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Push source files to an Apps Script project, replacing its content."""
+        return dict(
+            self.script.projects()
+            .updateContent(scriptId=script_id, body={"files": files})
+            .execute()
+        )
 
     def processes(self, limit: int = 50) -> list[dict[str, Any]]:
         """Recent Apps Script executions, across all your projects."""

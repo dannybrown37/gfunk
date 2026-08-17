@@ -72,3 +72,38 @@ def test_processes_respects_limit(cache: Cache) -> None:
     ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, script=script)
 
     assert len(ws.processes(limit=2)) == 2
+
+
+def test_script_content_returns_source_files(cache: Cache) -> None:
+    files = [
+        {"name": "Code", "type": "SERVER_JS", "source": "function main() {}"},
+        {"name": "appsscript", "type": "JSON", "source": "{}"},
+    ]
+    script = MagicMock()
+    script.projects.return_value.getContent.return_value.execute.return_value = {
+        "scriptId": "abc123",
+        "files": files,
+    }
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, script=script)
+
+    found = ws.script_content("abc123")
+
+    assert found == files
+    script.projects.return_value.getContent.assert_called_once_with(scriptId="abc123")
+
+
+def test_update_script_content_pushes_files(cache: Cache) -> None:
+    files = [{"name": "Code", "type": "SERVER_JS", "source": "function main() {}"}]
+    script = MagicMock()
+    script.projects.return_value.updateContent.return_value.execute.return_value = {
+        "scriptId": "abc123",
+        "files": files,
+    }
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, script=script)
+
+    result = ws.update_script_content("abc123", files)
+
+    assert result["scriptId"] == "abc123"
+    script.projects.return_value.updateContent.assert_called_once_with(
+        scriptId="abc123", body={"files": files}
+    )

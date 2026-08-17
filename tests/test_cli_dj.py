@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,7 +8,14 @@ from gfunk.cli import cmd_dj
 
 
 def dj_args(**overrides: object) -> argparse.Namespace:
-    defaults: dict[str, object] = {"page": None, "json": False}
+    defaults: dict[str, object] = {
+        "page": None,
+        "json": False,
+        "script_id": None,
+        "directory": None,
+        "out": None,
+        "yes": False,
+    }
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -110,6 +118,92 @@ def test_dj_fzf_picker_escape_does_nothing() -> None:
 
     assert rc == 0
     opened.assert_not_called()
+
+
+def test_dj_pull_writes_source_files(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ws = MagicMock()
+    ws.script_content.return_value = [
+        {"name": "Code", "type": "SERVER_JS", "source": "function main() {}"}
+    ]
+    out_dir = tmp_path / "pulled"
+    with patch("gfunk.workspace.Workspace.connect", return_value=ws):
+        rc = cmd_dj(dj_args(page="pull", script_id="abc123", out=out_dir))
+
+    assert rc == 0
+    ws.script_content.assert_called_once_with("abc123")
+    assert (out_dir / "Code.gs").read_text() == "function main() {}"
+    assert "Code.gs" in capsys.readouterr().out
+
+
+def test_dj_pull_missing_script_id_errors(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cmd_dj(dj_args(page="pull"))
+
+    assert rc == 1
+    assert "script_id" in capsys.readouterr().err
+
+
+def test_dj_push_writes_to_script_after_confirmation(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "Code.gs").write_text("function main() {}")
+    ws = MagicMock()
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=ws),
+        patch("gfunk.cli.prompt", return_value="push"),
+    ):
+        rc = cmd_dj(dj_args(page="push", script_id="abc123", directory=tmp_path))
+
+    assert rc == 0
+    ws.update_script_content.assert_called_once_with(
+        "abc123",
+        [{"name": "Code", "type": "SERVER_JS", "source": "function main() {}"}],
+    )
+    assert "Pushed" in capsys.readouterr().out
+
+
+def test_dj_push_aborts_when_not_confirmed(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "Code.gs").write_text("1;")
+    ws = MagicMock()
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=ws),
+        patch("gfunk.cli.prompt", return_value="no"),
+    ):
+        rc = cmd_dj(dj_args(page="push", script_id="abc123", directory=tmp_path))
+
+    assert rc == 0
+    ws.update_script_content.assert_not_called()
+
+
+def test_dj_push_yes_skips_confirmation(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "Code.gs").write_text("1;")
+    ws = MagicMock()
+    with patch("gfunk.workspace.Workspace.connect", return_value=ws):
+        rc = cmd_dj(
+            dj_args(page="push", script_id="abc123", directory=tmp_path, yes=True)
+        )
+
+    assert rc == 0
+    ws.update_script_content.assert_called_once()
+
+
+def test_dj_push_missing_directory_errors(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = cmd_dj(dj_args(page="push", script_id="abc123"))
+
+    assert rc == 1
+    assert "directory" in capsys.readouterr().err
+
+
+def test_dj_push_nonexistent_directory_errors(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = cmd_dj(
+        dj_args(page="push", script_id="abc123", directory=tmp_path / "missing")
+    )
+
+    assert rc == 1
+    assert "not found" in capsys.readouterr().err.lower()
 
 
 def test_dj_fzf_picker_my_projects_opens_home() -> None:

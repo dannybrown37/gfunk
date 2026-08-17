@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 import webbrowser
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
@@ -219,10 +219,31 @@ def build_parser() -> argparse.ArgumentParser:
     dj.add_argument(
         "page",
         nargs="?",
-        help="'list', 'runs', 'triggers', or a script id to open directly",
+        help="'list', 'runs', 'triggers', 'pull', 'push', or a script id to open",
+    )
+    dj.add_argument(
+        "script_id",
+        nargs="?",
+        help="Script id, required for 'pull' and 'push'",
+    )
+    dj.add_argument(
+        "directory",
+        nargs="?",
+        type=Path,
+        help="Local directory, required for 'push'",
     )
     dj.add_argument(
         "--json", action="store_true", help="Emit JSON instead of a table (list)"
+    )
+    dj.add_argument(
+        "--out",
+        type=Path,
+        help="Output directory for 'pull' (default: ./<script_id>)",
+    )
+    dj.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the overwrite confirmation for 'push'",
     )
 
     mothership = sub.add_parser(
@@ -1221,14 +1242,91 @@ def _dj_runs(*, as_json: bool) -> int:
     return emit_table(rows, "gfunk dj runs")
 
 
+def _dj_pull(script_id: str, *, out: Path | None) -> int:
+    from gfunk.workspace import Workspace, write_script_files
+
+    with status("Pulling script source"):
+        ws = Workspace.connect()
+        files = ws.script_content(script_id)
+
+    if not files:
+        print("(no source files found)", file=sys.stderr)
+        return 0
+
+    out_dir = out or Path(script_id)
+    written = write_script_files(files, out_dir)
+
+    print(f"Pulled {len(written)} file(s) to {out_dir}/")
+    for path in written:
+        print(f"  {path.name}")
+    print(
+        f"\nRun again with:\n  gfunk dj pull {quote(script_id)}",
+        file=sys.stderr,
+    )
+    return 0
+
+
+def _dj_push(script_id: str, directory: Path, *, skip_confirm: bool) -> int:
+    from gfunk.workspace import Workspace, read_script_files
+
+    if not directory.is_dir():
+        print(f"Directory not found: {directory}", file=sys.stderr)
+        return 1
+
+    files = read_script_files(directory)
+    if not files:
+        print(f"(no script source files found in {directory})", file=sys.stderr)
+        return 1
+
+    if not skip_confirm:
+        answer = prompt(
+            f"This replaces the live content of script {script_id}. "
+            "Type 'push' to continue: ",
+            "--yes",
+        )
+        if answer != "push":
+            print("Aborted.", file=sys.stderr)
+            return 0
+
+    with status("Pushing script source"):
+        ws = Workspace.connect()
+        ws.update_script_content(script_id, files)
+
+    print(f"Pushed {len(files)} file(s) to script {script_id}")
+    replay = f"gfunk dj push {quote(script_id)} {quote(str(directory))}"
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    return 0
+
+
+def _dj_pull_or_push(page: str, args: argparse.Namespace) -> int:
+    script_id = getattr(args, "script_id", None)
+    if page == "pull":
+        if not script_id:
+            print("Usage: gfunk dj pull <script_id> [--out DIR]", file=sys.stderr)
+            return 1
+        return _dj_pull(script_id, out=getattr(args, "out", None))
+
+    directory = getattr(args, "directory", None)
+    if not script_id or not directory:
+        print("Usage: gfunk dj push <script_id> <directory>", file=sys.stderr)
+        return 1
+    return _dj_push(script_id, directory, skip_confirm=getattr(args, "yes", False))
+
+
 def cmd_dj(args: argparse.Namespace) -> int:
     from gfunk.browser import register as register_browser
 
     page = args.page
 
-    if page in ("list", "runs"):
-        handler = _dj_list if page == "list" else _dj_runs
-        return handler(as_json=getattr(args, "json", False))
+    as_json = getattr(args, "json", False)
+    handlers: dict[str, Callable[[], int]] = {
+        "list": lambda: _dj_list(as_json=as_json),
+        "runs": lambda: _dj_runs(as_json=as_json),
+        "pull": lambda: _dj_pull_or_push("pull", args),
+        "push": lambda: _dj_pull_or_push("push", args),
+    }
+    if page in handlers:
+        return handlers[page]()
 
     if page:
         if page in DJ_PAGES:
@@ -1272,10 +1370,12 @@ def cmd_dj(args: argparse.Namespace) -> int:
     webbrowser.open(DJ_HOME)
     print("Apps Script dashboard")
     print("\nPages:")
-    print("  gfunk dj list         Your projects (table)")
-    print("  gfunk dj runs         Recent executions")
-    print("  gfunk dj triggers     Your triggers")
-    print("  gfunk dj <script_id>  Open a specific project")
+    print("  gfunk dj list                     Your projects (table)")
+    print("  gfunk dj runs                     Recent executions")
+    print("  gfunk dj triggers                 Your triggers")
+    print("  gfunk dj pull <script_id>         Pull source to a local directory")
+    print("  gfunk dj push <script_id> <dir>   Push local source to the script")
+    print("  gfunk dj <script_id>              Open a specific project")
     return 0
 
 
