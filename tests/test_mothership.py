@@ -39,7 +39,7 @@ def test_every_tool_is_namespaced(workspace: Workspace) -> None:
         f"{TOOL_PREFIX}snoop",
         f"{TOOL_PREFIX}sample",
         f"{TOOL_PREFIX}regulate",
-        f"{TOOL_PREFIX}dig",
+        f"{TOOL_PREFIX}peep",
     ],
 )
 def test_the_expected_verbs_are_registered(workspace: Workspace, verb: str) -> None:

@@ -32,7 +32,7 @@ uv run gfunk --version        # smoke test
 
 ## Conventions
 
-- Every subcommand has a primary name and aliases (e.g. `vibe` / `sheet`).
+- Every subcommand has exactly two names: one flavorful, one literal (e.g. `vibe` / `sheet`, `mothership` / `mcp`). No more, no less.
 - Commit messages follow Conventional Commits (commitizen enforced).
 - No comments unless the "why" is non-obvious.
 - Type hints on all function signatures (mypy strict).

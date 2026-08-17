@@ -62,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     # "sheet"/"sample" are aliases; "vibe" is the one we mean.
     vibe = sub.add_parser(
         "vibe",
-        aliases=["sample", "sheet"],
+        aliases=["sheet"],
         help="Interactive spreadsheet viewer — filter and search",
     )
     vibe.add_argument("spreadsheet_id", nargs="?")
@@ -72,13 +72,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit JSON instead of a table"
     )
     vibe.add_argument("--raw", action="store_true", help="Plain table output (no TUI)")
-
-    dig = sub.add_parser(
-        "dig",
-        aliases=["open"],
-        help="Pick a recent Drive file and open it in your browser",
-    )
-    dig.add_argument("file_id", nargs="?", help="Drive file id")
 
     regulate = sub.add_parser(
         "regulate",
@@ -97,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     peep = sub.add_parser(
         "peep",
         aliases=["read"],
-        help="Read a Doc or Sheet in the terminal",
+        help="Read a Drive file in the terminal, or open it in the browser",
     )
     peep.add_argument("file_id", nargs="?", help="Drive file id")
     peep.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50' (sheets)")
@@ -117,6 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
         "-o",
         type=Path,
         help="Write to file instead of stdout",
+    )
+    peep.add_argument(
+        "--open", action="store_true", help="Open in browser instead of printing"
     )
 
     bounce = sub.add_parser(
@@ -512,13 +508,38 @@ def cmd_snoop(args: argparse.Namespace) -> int:
         if action is None or action == "Open in browser":
             open_in_browser(item)
             return emit(item, f"gfunk snoop {quote(folder_id)} --limit {args.limit}")
+        if action == "Print":
+            return _snoop_print(workspace, item)
         if action == "Move":
             return _snoop_move(workspace, item)
 
     return 0
 
 
-SNOOP_ACTIONS = ["Open in browser", "Move"]
+SNOOP_ACTIONS = ["Open in browser", "Print", "Move"]
+
+
+def _snoop_print(workspace: Any, file_meta: dict[str, Any]) -> int:
+    from gfunk.workspace import DOC_MIME, SHEET_MIME
+
+    file_id = file_meta["id"]
+    name = file_meta.get("name", file_id)
+    mime = file_meta.get("mimeType", "")
+
+    if mime == DOC_MIME:
+        data = workspace.export(file_id, "text/plain")
+        print(data.decode(), end="")
+        return 0
+
+    if mime == SHEET_MIME:
+        tab = pick_range(workspace, file_id)
+        if not tab:
+            return 0
+        rows = workspace.sample(file_id, tab)
+        return emit_table(rows, f"gfunk peep {quote(file_id)} {quote(tab)}")
+
+    print(f"{name} is not a Doc or Sheet — cannot print.", file=sys.stderr)
+    return 1
 
 
 def _snoop_move(workspace: Any, file_meta: dict[str, Any]) -> int:
@@ -559,35 +580,6 @@ def pick_file(
     labels = {f"{f['name']}\t{f['id']}": f for f in files}
     chosen = fzf_pick(list(labels), header, abort_ok=True)
     return labels[chosen] if chosen else None
-
-
-def cmd_dig(args: argparse.Namespace) -> int:
-    from gfunk.workspace import Workspace
-
-    with status("Signing in to Google"):
-        workspace = Workspace.connect()
-
-    file_id = args.file_id
-    file_meta = None
-
-    if not file_id:
-        file_meta = pick_file(workspace)
-        if not file_meta:
-            return 0
-
-    if file_meta:
-        file_id = file_meta["id"]
-    else:
-        with status("Reading file metadata"):
-            file_meta = workspace.file_meta(file_id)
-
-    name = file_meta.get("name", file_id)
-    open_in_browser(file_meta)
-    print(f"Opened {name} in your browser.", file=sys.stderr)
-    return emit(
-        file_meta,
-        f"gfunk dig {quote(file_id)}",
-    )
 
 
 def pick_spreadsheet(workspace: Any) -> str | None:
@@ -695,11 +687,9 @@ def cmd_peep(args: argparse.Namespace) -> int:
     file_meta = None
 
     if not file_id:
-        file_meta = pick_file(
-            workspace,
-            mime_types=peepable,
-            header="Pick a Doc or Sheet to read",
-        )
+        mime_filter = None if args.open else peepable
+        header = "Pick a file" if args.open else "Pick a Doc or Sheet to read"
+        file_meta = pick_file(workspace, mime_types=mime_filter, header=header)
         if not file_meta:
             return 0
 
@@ -711,6 +701,11 @@ def cmd_peep(args: argparse.Namespace) -> int:
 
     mime = file_meta.get("mimeType", "")
     name = file_meta.get("name", file_id)
+
+    if args.open:
+        open_in_browser(file_meta)
+        print(f"Opened {name} in your browser.", file=sys.stderr)
+        return emit(file_meta, f"gfunk peep {quote(file_id)} --open")
 
     if mime not in peepable:
         print(
@@ -1109,10 +1104,7 @@ COMMANDS = {
     "login": cmd_mount_up,
     "snoop": cmd_snoop,
     "browse": cmd_snoop,
-    "dig": cmd_dig,
-    "open": cmd_dig,
     "vibe": cmd_vibe,
-    "sample": cmd_vibe,
     "sheet": cmd_vibe,
     "peep": cmd_peep,
     "read": cmd_peep,

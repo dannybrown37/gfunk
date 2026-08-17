@@ -81,9 +81,7 @@ def test_vibe_no_tty_falls_back_to_raw(capsys: pytest.CaptureFixture[str]) -> No
     assert "X" in capsys.readouterr().out
 
 
-def test_sample_alias_still_works() -> None:
-    """The old 'sample' command name should still route to cmd_vibe."""
+def test_sheet_alias_still_works() -> None:
     from gfunk.cli import COMMANDS
 
-    assert COMMANDS["sample"] is cmd_vibe
     assert COMMANDS["sheet"] is cmd_vibe

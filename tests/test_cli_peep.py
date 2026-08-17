@@ -16,6 +16,7 @@ def peep_args(**overrides: object) -> argparse.Namespace:
         "json": False,
         "limit": None,
         "output": None,
+        "open": False,
     }
     return argparse.Namespace(**{**defaults, **overrides})
 

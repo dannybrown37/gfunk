@@ -3,12 +3,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gfunk.cli import cmd_dig
+from gfunk.cli import cmd_peep
 from gfunk.workspace import DOC_MIME, SHEET_MIME
 
 
-def dig_args(**overrides: object) -> argparse.Namespace:
-    defaults: dict[str, object] = {"file_id": None}
+def peep_open_args(**overrides: object) -> argparse.Namespace:
+    defaults: dict[str, object] = {
+        "file_id": None,
+        "cell_range": None,
+        "fmt": None,
+        "json": False,
+        "limit": None,
+        "output": None,
+        "open": True,
+    }
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -27,7 +35,7 @@ DOC_FILE = {
 }
 
 
-def test_dig_opens_file_in_browser() -> None:
+def test_peep_open_opens_file_in_browser() -> None:
     workspace = MagicMock()
     workspace.file_meta.return_value = DOC_FILE
 
@@ -35,12 +43,12 @@ def test_dig_opens_file_in_browser() -> None:
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
-        assert cmd_dig(dig_args(file_id="d1")) == 0
+        assert cmd_peep(peep_open_args(file_id="d1")) == 0
 
     opened.assert_called_once_with(DOC_FILE)
 
 
-def test_dig_opens_sheets_in_browser_too() -> None:
+def test_peep_open_opens_sheets_in_browser_too() -> None:
     workspace = MagicMock()
     workspace.file_meta.return_value = SHEET_FILE
 
@@ -48,12 +56,14 @@ def test_dig_opens_sheets_in_browser_too() -> None:
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
-        assert cmd_dig(dig_args(file_id="s1")) == 0
+        assert cmd_peep(peep_open_args(file_id="s1")) == 0
 
     opened.assert_called_once_with(SHEET_FILE)
 
 
-def test_dig_echoes_replayable_command(capsys: pytest.CaptureFixture[str]) -> None:
+def test_peep_open_echoes_replayable_command(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     workspace = MagicMock()
     workspace.file_meta.return_value = DOC_FILE
 
@@ -61,9 +71,9 @@ def test_dig_echoes_replayable_command(capsys: pytest.CaptureFixture[str]) -> No
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.open_in_browser"),
     ):
-        cmd_dig(dig_args(file_id="d1"))
+        cmd_peep(peep_open_args(file_id="d1"))
 
-    assert "gfunk dig" in capsys.readouterr().err
+    assert "gfunk peep" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -71,7 +81,7 @@ def test_dig_echoes_replayable_command(capsys: pytest.CaptureFixture[str]) -> No
     [SHEET_FILE, DOC_FILE],
     ids=["sheet", "doc"],
 )
-def test_dig_picks_file_via_fzf_when_no_id(
+def test_peep_open_picks_file_via_fzf_when_no_id(
     file_meta: dict[str, str],
 ) -> None:
     workspace = MagicMock()
@@ -86,12 +96,12 @@ def test_dig_picks_file_via_fzf_when_no_id(
         ),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
-        assert cmd_dig(dig_args()) == 0
+        assert cmd_peep(peep_open_args()) == 0
 
     opened.assert_called_once()
 
 
-def test_dig_exits_cleanly_when_user_cancels_fzf() -> None:
+def test_peep_open_exits_cleanly_when_user_cancels_fzf() -> None:
     workspace = MagicMock()
     workspace.recent.return_value = [DOC_FILE]
 
@@ -101,6 +111,6 @@ def test_dig_exits_cleanly_when_user_cancels_fzf() -> None:
         patch("gfunk.cli.fzf_pick", return_value=None),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
-        assert cmd_dig(dig_args()) == 0
+        assert cmd_peep(peep_open_args()) == 0
 
     opened.assert_not_called()

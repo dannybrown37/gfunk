@@ -60,8 +60,8 @@ def build_server(
         files = ws.sharing(limit=limit)
         return audit(files, shared_only=shared_only)
 
-    @server.tool(name=f"{TOOL_PREFIX}dig")
-    def dig(file_id: str) -> dict[str, Any]:
+    @server.tool(name=f"{TOOL_PREFIX}peep")
+    def peep(file_id: str) -> dict[str, Any]:
         """Get metadata and webViewLink for a Drive file."""
         return connect().file_meta(file_id)
 

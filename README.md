@@ -49,7 +49,7 @@ Already have a token? Everything else just works:
 gfunk snoop "Q3 report"                     # search Drive
 gfunk vibe <sheet-id> 'Sheet1!A1:D50'       # interactive spreadsheet viewer (TUI)
 gfunk peep <file-id>                        # read a Doc or Sheet in the terminal
-gfunk dig <file-id>                         # open a Drive file in your browser
+gfunk peep <file-id> --open                 # open a Drive file in your browser
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk regulate                              # audit who can see your files
 gfunk dj                                    # open Apps Script dashboard
@@ -72,7 +72,7 @@ gfunk names the missing flag and exits rather than hanging a CI job.
 }
 ```
 
-Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__regulate`, `gfunk__dig`. **stdio only** — an HTTP
+Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__regulate`, `gfunk__peep`. **stdio only** — an HTTP
 listener holding live Workspace credentials is attack surface this project doesn't need yet.
 
 ### The local cache
@@ -94,8 +94,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
 | `snoop` | `browse` | Browse Drive folders like directories |
 | `vibe` | `sheet` | Interactive spreadsheet viewer (TUI) |
-| `dig` | `open` | Open a Drive file in your browser |
-| `peep` | `read` | Read a Doc or Sheet in the terminal |
+| `peep` | `read` | Read a file in the terminal, or `--open` in browser |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dj` | `scripts` | Open Apps Script dashboard, triggers, or runs |
@@ -144,10 +143,10 @@ gfunk/
 |   |-- test_cache.py
 |   |-- test_cli.py
 |   |-- test_cli_bounce.py
-|   |-- test_cli_dig.py
 |   |-- test_cli_dj.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_peep.py
+|   |-- test_cli_peep_open.py
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
