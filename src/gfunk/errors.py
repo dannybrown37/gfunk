@@ -46,10 +46,10 @@ def explain(exc: HttpError) -> str:
     if why in ("insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT"):
         return (
             "Your cached token lacks the scopes gfunk needs.\n"
-            "  rm ~/.config/gfunk/token.json && gfunk get-down"
+            "  rm ~/.config/gfunk/token.json && gfunk mount-up"
         )
     if status == UNAUTHORIZED:
-        return "Your sign-in is no longer valid. Run:\n  gfunk get-down"
+        return "Your sign-in is no longer valid. Run:\n  gfunk mount-up"
     if status == NOT_FOUND:
         return f"Google says that does not exist (404):\n  {text}"
     return f"Google refused the request ({status}):\n  {text}"

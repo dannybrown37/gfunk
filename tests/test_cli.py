@@ -46,9 +46,7 @@ def test_no_arguments_prints_usage_not_a_bare_error(
     assert "mount-up" in out
 
 
-@pytest.mark.parametrize(
-    "verb", ["mount-up", "get-down", "mothership", "snoop", "sample"]
-)
+@pytest.mark.parametrize("verb", ["mount-up", "mothership", "snoop", "sample"])
 def test_known_verbs_are_registered(
     verb: str, capsys: pytest.CaptureFixture[str]
 ) -> None:

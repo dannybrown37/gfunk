@@ -151,7 +151,7 @@ def walkthrough(project: str | None) -> list[Step]:
                 "  chmod 600 ~/.config/gfunk/credentials.json",
                 "Or let gfunk do it:",
                 "  gfunk mount-up --client-secrets <path/to/downloaded.json>",
-                "Then: gfunk get-down",
+                "Then: gfunk mount-up",
             ],
         ),
     ]

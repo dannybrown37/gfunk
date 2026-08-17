@@ -41,13 +41,13 @@ def test_a_disabled_api_names_the_console_page_to_click() -> None:
 
 def test_insufficient_scopes_says_to_drop_the_token_and_sign_in_again() -> None:
     exc = http_error(403, "Insufficient Permission", "insufficientPermissions")
-    assert "gfunk get-down" in explain(exc)
+    assert "gfunk mount-up" in explain(exc)
     assert "token.json" in explain(exc)
 
 
 @pytest.mark.parametrize(
     ("status", "expected"),
-    [(401, "gfunk get-down"), (404, "does not exist"), (500, "Google refused")],
+    [(401, "gfunk mount-up"), (404, "does not exist"), (500, "Google refused")],
 )
 def test_other_failures_still_say_something_actionable(
     status: int, expected: str

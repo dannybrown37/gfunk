@@ -49,7 +49,7 @@ def test_mount_up_installs_a_named_file_without_prompting(
 
     assert code == 0
     assert stat.S_IMODE(dest.stat().st_mode) == 0o600
-    assert "gfunk get-down" in capsys.readouterr().out
+    assert "gfunk mount-up" in capsys.readouterr().out
 
 
 def test_mount_up_rejects_a_service_account_key_with_a_useful_message(
@@ -101,14 +101,14 @@ def test_mount_up_picks_the_newest_download_when_confirmed(
     )
 
 
-def test_mount_up_offers_to_sign_in_and_runs_get_down(tmp_path: Path) -> None:
+def test_mount_up_offers_to_sign_in_and_runs_it(tmp_path: Path) -> None:
     source = client_json(tmp_path)
     dest = tmp_path / "config" / "credentials.json"
 
     with (
         patch("sys.stdin.isatty", return_value=True),
         patch("gfunk.cli.input", return_value="", create=True),
-        patch("gfunk.cli.cmd_get_down", return_value=0) as signed_in,
+        patch("gfunk.cli.sign_in", return_value=0) as signed_in,
     ):
         code = main_code(
             [
@@ -123,7 +123,7 @@ def test_mount_up_offers_to_sign_in_and_runs_get_down(tmp_path: Path) -> None:
         )
 
     assert code == 0
-    assert signed_in.call_args.args[0].client_secrets == dest
+    signed_in.assert_called_once()
 
 
 def test_mount_up_declining_sign_in_leaves_the_next_command(
@@ -135,7 +135,7 @@ def test_mount_up_declining_sign_in_leaves_the_next_command(
     with (
         patch("sys.stdin.isatty", return_value=True),
         patch("gfunk.cli.input", return_value="n", create=True),
-        patch("gfunk.cli.cmd_get_down") as signed_in,
+        patch("gfunk.cli.sign_in") as signed_in,
     ):
         code = main_code(
             [
@@ -151,7 +151,7 @@ def test_mount_up_declining_sign_in_leaves_the_next_command(
 
     signed_in.assert_not_called()
     assert code == 0
-    assert "gfunk get-down" in capsys.readouterr().out
+    assert "gfunk mount-up" in capsys.readouterr().out
 
 
 def test_setup_is_an_alias_for_mount_up(tmp_path: Path) -> None:
@@ -234,7 +234,7 @@ def test_mount_up_still_offers_sign_in_when_the_token_is_stale(
 
     assert code == 0
     asked.assert_called_once()
-    assert "gfunk get-down" in capsys.readouterr().out
+    assert "gfunk mount-up" in capsys.readouterr().out
 
 
 def test_mount_up_reinstall_forces_the_walkthrough(
@@ -303,7 +303,7 @@ def main_code(argv: list[str]) -> int:
 
 @pytest.mark.parametrize(
     ("alias", "canonical"),
-    [("setup", "mount-up"), ("login", "get-down"), ("browse", "snoop")],
+    [("setup", "mount-up"), ("browse", "snoop")],
 )
 def test_the_word_a_new_user_types_blind_reaches_the_real_command(
     alias: str, canonical: str

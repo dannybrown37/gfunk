@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gfunk",
         description="Programmatic Google Workspace access — CLI and MCP server.",
+        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40),
     )
     parser.add_argument("--version", action="version", version=version("gfunk"))
     sub = parser.add_subparsers(dest="command", metavar="<command>")
@@ -20,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     # "setup" is the word a new user types blind; "mount-up" is the one we mean.
     mount_up = sub.add_parser(
         "mount-up",
-        aliases=["setup"],
+        aliases=["setup", "login"],
         help="Create and install your own OAuth client, then sign in",
     )
     mount_up.add_argument(
@@ -44,21 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print the console walkthrough and stop, set up or not",
     )
     mount_up.add_argument(
-        "--no-sign-in", action="store_true", help="Install only; don't run get-down"
+        "--no-sign-in", action="store_true", help="Install only; don't sign in"
     )
-
-    # "login" is the word a new user types blind; "get-down" is the one we mean.
-    get_down = sub.add_parser(
-        "get-down",
-        aliases=["login"],
-        help="Sign in — OAuth against your own GCP client",
-    )
-    get_down.add_argument(
-        "--client-secrets",
-        type=Path,
-        help="Path to your installed OAuth client JSON",
-    )
-    get_down.add_argument("--token", type=Path, help="Where to cache the token")
 
     # "browse" is the word a new user types blind; "snoop" is the one we mean.
     snoop = sub.add_parser(
@@ -250,16 +238,8 @@ def quote(value: str) -> str:
     return shell_quote(value)
 
 
-def cmd_get_down(args: argparse.Namespace) -> int:
-    from gfunk.auth import (
-        DEFAULT_CLIENT_SECRETS,
-        DEFAULT_TOKEN_PATH,
-        MissingClientSecretsError,
-        get_down,
-    )
-
-    client_secrets = args.client_secrets or DEFAULT_CLIENT_SECRETS
-    token_path = args.token or DEFAULT_TOKEN_PATH
+def sign_in(client_secrets: Path, token_path: Path) -> int:
+    from gfunk.auth import MissingClientSecretsError, get_down
 
     try:
         get_down(client_secrets=client_secrets, token_path=token_path)
@@ -267,9 +247,7 @@ def cmd_get_down(args: argparse.Namespace) -> int:
         print(exc, file=sys.stderr)
         return 1
 
-    print(f"Got down. Token cached at {token_path}")
-    print("Run again with:")
-    print(f"  gfunk get-down --client-secrets {client_secrets} --token {token_path}")
+    print(f"Signed in. Token cached at {token_path}")
     return 0
 
 
@@ -352,13 +330,13 @@ def offer_sign_in(dest: Path, token: Path | None = None, *, skip: bool = False) 
 
     if skip or not sys.stdin.isatty():
         print("\nNow sign in:")
-        print("  gfunk get-down")
+        print("  gfunk mount-up")
         return 0
     if prompt("\nSign in now? [Y/n]: ", "--no-sign-in").lower().startswith("n"):
         print("\nWhen you are ready:")
-        print("  gfunk get-down")
+        print("  gfunk mount-up")
         return 0
-    return cmd_get_down(argparse.Namespace(client_secrets=dest, token=token))
+    return sign_in(client_secrets=dest, token_path=token)
 
 
 def already_installed(dest: Path, token: Path | None = None) -> int:
@@ -969,8 +947,7 @@ def regulate_pick(rows: list[dict[str, Any]]) -> None:
 
     if action in WRITE_ACTIONS:
         print(
-            f"{action} requires write scopes. Re-authenticate with:\n"
-            f"  gfunk get-down --write",
+            f"{action} requires write scopes. Re-authenticate with:\n  gfunk mount-up",
             file=sys.stderr,
         )
         return
@@ -1109,8 +1086,7 @@ def cmd_slide(args: argparse.Namespace) -> int:
 COMMANDS = {
     "mount-up": cmd_mount_up,
     "setup": cmd_mount_up,
-    "get-down": cmd_get_down,
-    "login": cmd_get_down,
+    "login": cmd_mount_up,
     "snoop": cmd_snoop,
     "browse": cmd_snoop,
     "dig": cmd_dig,
