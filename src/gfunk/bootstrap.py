@@ -33,7 +33,7 @@ def classify(path: Path) -> Kind:
         payload = json.loads(path.read_text())
     except FileNotFoundError:
         return "missing"
-    except json.JSONDecodeError, UnicodeDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return "malformed"
 
     if not isinstance(payload, dict):
@@ -83,7 +83,7 @@ def project_of(path: Path) -> str | None:
     """The client JSON names its own project; asking the user for it is redundant."""
     try:
         payload = json.loads(path.read_text())
-    except OSError, json.JSONDecodeError, UnicodeDecodeError:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
     if not isinstance(payload, dict):
         return None

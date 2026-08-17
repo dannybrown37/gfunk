@@ -142,3 +142,41 @@ def test_children_escapes_the_folder_id_it_is_handed() -> None:
 
     kwargs = drive.files.return_value.list.call_args.kwargs
     assert kwargs["q"] == "'it\\'s' in parents and trashed = false"
+
+
+def test_move_updates_parents() -> None:
+    drive = MagicMock()
+    drive.files.return_value.update.return_value.execute.return_value = {
+        "id": "file1",
+        "name": "Budget",
+        "parents": ["dest-folder"],
+    }
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    result = workspace.move(
+        "file1", add_parent="dest-folder", remove_parent="src-folder"
+    )
+
+    drive.files.return_value.update.assert_called_once_with(
+        fileId="file1",
+        addParents="dest-folder",
+        removeParents="src-folder",
+        fields="id, name, parents",
+    )
+    assert result["parents"] == ["dest-folder"]
+
+
+def test_file_meta_includes_parents() -> None:
+    drive = MagicMock()
+    drive.files.return_value.get.return_value.execute.return_value = {
+        "id": "f1",
+        "name": "Budget",
+        "mimeType": "text/plain",
+        "parents": ["folder1"],
+    }
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    workspace.file_meta("f1")
+
+    fields = drive.files.return_value.get.call_args.kwargs["fields"]
+    assert "parents" in fields

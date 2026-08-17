@@ -10,13 +10,27 @@ from gfunk.browser import hyperlink
 from gfunk.browser import register as register_browser
 
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
 ]
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "gfunk"
 DEFAULT_CLIENT_SECRETS = DEFAULT_CONFIG_DIR / "credentials.json"
 DEFAULT_TOKEN_PATH = DEFAULT_CONFIG_DIR / "token.json"
+
+
+def _scopes_changed(token_path: Path, expected: list[str]) -> bool:
+    """True when the cached token was issued for different scopes."""
+    import json
+
+    try:
+        stored = json.loads(token_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+    saved = stored.get("scopes")
+    if not saved:
+        return False
+    return set(expected) != set(saved)
 
 
 TokenState = Literal["none", "signed-in", "refreshable", "stale"]
@@ -28,11 +42,12 @@ def token_state(
     """What the cached token is still good for, without touching the network."""
     if not token_path.exists():
         return "none"
+    expected = scopes if scopes is not None else SCOPES
+    if _scopes_changed(token_path, expected):
+        return "stale"
     try:
-        creds = Credentials.from_authorized_user_file(
-            str(token_path), scopes if scopes is not None else SCOPES
-        )
-    except ValueError, OSError:
+        creds = Credentials.from_authorized_user_file(str(token_path), expected)
+    except (ValueError, OSError):
         return "stale"
 
     if creds.valid:
@@ -60,7 +75,10 @@ def get_down(
     creds: Credentials | None = None
 
     if token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+        if _scopes_changed(token_path, scopes):
+            token_path.unlink()
+        else:
+            creds = Credentials.from_authorized_user_file(str(token_path), scopes)
 
     if creds and creds.valid:
         return creds

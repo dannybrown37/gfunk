@@ -151,6 +151,7 @@ gfunk/
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
+|   |-- test_cli_slide.py
 |   |-- test_errors.py
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py

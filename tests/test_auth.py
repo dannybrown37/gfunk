@@ -21,7 +21,7 @@ def fake_creds(*, valid: bool = True, expired: bool = False) -> MagicMock:
     creds.valid = valid
     creds.expired = expired
     creds.refresh_token = "refresh"
-    creds.to_json.return_value = json.dumps({"token": "cached"})
+    creds.to_json.return_value = json.dumps({"token": "cached", "scopes": SCOPES})
     return creds
 
 
@@ -45,13 +45,13 @@ def test_first_run_completes_flow_and_caches_token(
         get_down(client_secrets=client_secrets, token_path=token_path)
 
     from_file.assert_called_once_with(str(client_secrets), SCOPES)
-    assert json.loads(token_path.read_text()) == {"token": "cached"}
+    assert json.loads(token_path.read_text()) == {"token": "cached", "scopes": SCOPES}
 
 
-def test_scopes_are_sheets_and_drive_read_only() -> None:
+def test_scopes_include_sheets_and_drive() -> None:
     assert SCOPES == [
-        "https://www.googleapis.com/auth/spreadsheets.readonly",
-        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
     ]
 
 
@@ -59,7 +59,7 @@ def test_cached_valid_token_skips_the_browser(
     client_secrets: Path, tmp_path: Path
 ) -> None:
     token_path = tmp_path / "token.json"
-    token_path.write_text(json.dumps({"token": "cached"}))
+    token_path.write_text(json.dumps({"token": "cached", "scopes": SCOPES}))
 
     with (
         patch(
@@ -77,7 +77,7 @@ def test_expired_token_refreshes_instead_of_reauthorizing(
     client_secrets: Path, tmp_path: Path
 ) -> None:
     token_path = tmp_path / "token.json"
-    token_path.write_text(json.dumps({"token": "stale"}))
+    token_path.write_text(json.dumps({"token": "stale", "scopes": SCOPES}))
     creds = fake_creds(valid=False, expired=True)
 
     with (
@@ -88,7 +88,7 @@ def test_expired_token_refreshes_instead_of_reauthorizing(
 
     creds.refresh.assert_called_once()
     from_file.assert_not_called()
-    assert json.loads(token_path.read_text()) == {"token": "cached"}
+    assert json.loads(token_path.read_text()) == {"token": "cached", "scopes": SCOPES}
 
 
 @pytest.mark.parametrize(
@@ -108,11 +108,53 @@ def test_token_state_names_what_the_cached_token_can_still_do(
     expired: bool,
 ) -> None:
     token = tmp_path / "token.json"
-    token.write_text("{}")
+    token.write_text(json.dumps({"scopes": SCOPES}))
     creds = SimpleNamespace(valid=valid, expired=expired, refresh_token=refresh_token)
 
     with patch("gfunk.auth.Credentials.from_authorized_user_file", return_value=creds):
         assert auth.token_state(token) == expected
+
+
+def test_token_state_is_stale_when_scopes_narrower_than_required(
+    tmp_path: Path,
+) -> None:
+    token = tmp_path / "token.json"
+    token.write_text(
+        json.dumps(
+            {
+                "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+            }
+        )
+    )
+
+    assert auth.token_state(token) == "stale"
+
+
+def test_scope_mismatch_forces_reauth(
+    client_secrets: Path,
+    tmp_path: Path,
+) -> None:
+    token_path = tmp_path / "token.json"
+    token_path.write_text(
+        json.dumps(
+            {
+                "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+            }
+        )
+    )
+
+    flow = MagicMock()
+    flow.run_local_server.return_value = fake_creds()
+
+    with patch(
+        "gfunk.auth.InstalledAppFlow.from_client_secrets_file", return_value=flow
+    ) as from_file:
+        get_down(client_secrets=client_secrets, token_path=token_path)
+
+    from_file.assert_called_once()
+    assert not token_path.read_text().startswith(
+        '{"scopes": ["https://www.googleapis.com/auth/drive.readonly"]'
+    )
 
 
 def test_token_state_is_none_without_a_token_file(tmp_path: Path) -> None:

@@ -1,7 +1,6 @@
-"""The read surface: Drive search, Sheets reads, and the join between them.
+"""Drive search, Sheets reads, file operations, and the join between them."""
 
-Everything here is read-only, matching the scopes `get-down` requests.
-"""
+from __future__ import annotations
 
 from typing import Any
 
@@ -223,7 +222,22 @@ class Workspace:
         """Metadata for a single file."""
         return dict(
             self.drive.files()
-            .get(fileId=file_id, fields="id,name,mimeType,webViewLink")
+            .get(fileId=file_id, fields="id,name,mimeType,webViewLink,parents")
+            .execute()
+        )
+
+    def move(
+        self, file_id: str, *, add_parent: str, remove_parent: str
+    ) -> dict[str, Any]:
+        """Move a file from one folder to another."""
+        return dict(
+            self.drive.files()
+            .update(
+                fileId=file_id,
+                addParents=add_parent,
+                removeParents=remove_parent,
+                fields="id, name, parents",
+            )
             .execute()
         )
 
