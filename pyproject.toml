@@ -1,6 +1,6 @@
 [project]
 name = "gfunk"
-version = "0.1.0"
+version = "0.0.0"
 description = "MCP server and CLI for programmatic Google Workspace access"
 requires-python = ">=3.13"
 dependencies = [

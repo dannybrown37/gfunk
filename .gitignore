@@ -2,6 +2,8 @@
 **.env
 token.json
 *token.json
+*.pem
+*.key
 build/
 **/build/**
 .venv/

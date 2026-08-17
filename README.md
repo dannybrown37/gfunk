@@ -46,11 +46,14 @@ walkthrough and the scriptable form, `gfunk mount-up --client-secrets <file>`.
 Already have a token? Everything else just works:
 
 ```bash
-gfunk get-down                              # sign in (OAuth), on its own
 gfunk snoop "Q3 report"                     # search Drive
-gfunk sample <sheet-id> 'Sheet1!A1:D50'     # pull rows as a table
-gfunk dig <file-id>                         # open a Doc, or tail a spreadsheet
+gfunk vibe <sheet-id> 'Sheet1!A1:D50'       # interactive spreadsheet viewer (TUI)
+gfunk peep <file-id>                        # read a Doc or Sheet in the terminal
+gfunk dig <file-id>                         # open a Drive file in your browser
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
+gfunk regulate                              # audit who can see your files
+gfunk dj                                    # open Apps Script dashboard
+gfunk slide <file-id>                       # move a file to another folder
 gfunk mothership                            # start the MCP server on stdio
 ```
 
@@ -87,21 +90,18 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 
 ## The vocabulary
 
-| Command | What it does |
-|---|---|
-| `gfunk snoop` | Browse Drive folders like directories |
-| `gfunk dig` | Open a Drive file in your browser |
-| `gfunk sample` | Pull rows from a spreadsheet as a table |
-| `gfunk bounce` | Export (Sheets→CSV/JSON, Docs→txt/html) |
-| `gfunk hook` | Webhooks / event triggers |
-| `gfunk loop` | Scheduled and recurring jobs |
-| `gfunk regulate` | Audit who can reach the Drive files you own |
-| `gfunk mount-up` | Guided first-run: create, install, sign in |
-| `gfunk get-down` | Sign in — the OAuth flow itself |
-| `gfunk mothership` | Start the MCP server |
-
-`mount-up`, `get-down`, `snoop`, `dig`, `sample`, `bounce`, `regulate` and `mothership` are implemented.
-`hook` and `loop` are the planned surface.
+| Command | Alias | What it does |
+|---|---|---|
+| `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
+| `snoop` | `browse` | Browse Drive folders like directories |
+| `vibe` | `sheet` | Interactive spreadsheet viewer (TUI) |
+| `dig` | `open` | Open a Drive file in your browser |
+| `peep` | `read` | Read a Doc or Sheet in the terminal |
+| `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
+| `regulate` | `audit` | Audit who can reach the Drive files you own |
+| `dj` | `scripts` | Open Apps Script dashboard, triggers, or runs |
+| `slide` | `move` | Move a file to another folder |
+| `mothership` | `mcp` | Start the MCP server on stdio |
 
 ## Development
 
@@ -163,6 +163,7 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
+|-- CLAUDE.md
 |-- pyproject.toml
 |-- README.md
 `-- uv.lock
