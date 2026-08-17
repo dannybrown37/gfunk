@@ -46,10 +46,10 @@ walkthrough and the scriptable form, `gfunk mount-up --client-secrets <file>`.
 Already have a token? Everything else just works:
 
 ```bash
-gfunk snoop "Q3 report"                     # search Drive
-gfunk vibe <sheet-id> 'Sheet1!A1:D50'       # interactive spreadsheet viewer (TUI)
-gfunk peep <file-id>                        # read a Doc or Sheet in the terminal
-gfunk peep <file-id> --open                 # open a Drive file in your browser
+gfunk snoop                                 # walk your Drive folders
+gfunk snoop <file-id>                       # read a Doc or Sheet in the terminal
+gfunk snoop <file-id> --open                # open a Drive file in your browser
+gfunk snoop <sheet-id> 'Sheet1!A1:D50'      # interactive spreadsheet viewer (TUI)
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk regulate                              # audit who can see your files
 gfunk dj                                    # open Apps Script dashboard
@@ -92,9 +92,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | Command | Alias | What it does |
 |---|---|---|
 | `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
-| `snoop` | `browse` | Browse Drive folders like directories |
-| `vibe` | `sheet` | Interactive spreadsheet viewer (TUI) |
-| `peep` | `read` | Read a file in the terminal, or `--open` in browser |
+| `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dj` | `scripts` | Open Apps Script dashboard, triggers, or runs |

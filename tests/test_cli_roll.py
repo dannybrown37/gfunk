@@ -12,7 +12,16 @@ FILE = {"id": "d1", "name": "Budget", "webViewLink": "https://x"}
 
 
 def snoop_args(**overrides: object) -> argparse.Namespace:
-    defaults = {"folder": None, "limit": 200}
+    defaults: dict[str, object] = {
+        "target": None,
+        "cell_range": None,
+        "fmt": None,
+        "json": False,
+        "limit": 200,
+        "output": None,
+        "open": False,
+        "raw": False,
+    }
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -177,13 +186,18 @@ def test_without_fzf_it_prints_the_folder_as_json_instead_of_hanging(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = {
+        "id": "f1",
+        "name": "Reports",
+        "mimeType": FOLDER_MIME,
+    }
     workspace.children.return_value = [FILE]
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=False),
     ):
-        assert cmd_snoop(snoop_args(folder="f1")) == 0
+        assert cmd_snoop(snoop_args(target="f1")) == 0
 
     assert '"id": "d1"' in capsys.readouterr().out
 

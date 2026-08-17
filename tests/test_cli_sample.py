@@ -3,31 +3,45 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gfunk.cli import cmd_vibe, pick_spreadsheet, pick_range
+from gfunk.cli import cmd_snoop, pick_spreadsheet, pick_range
+from gfunk.workspace import SHEET_MIME
 
 
 def sample_args(**overrides: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
-        "spreadsheet_id": None,
+        "target": None,
         "cell_range": None,
+        "fmt": None,
         "limit": None,
         "json": False,
         "raw": True,
+        "output": None,
+        "open": False,
     }
     return argparse.Namespace(**{**defaults, **overrides})
 
 
 SHEET = {"id": "s1", "name": "Budget"}
+SHEET_META = {
+    "id": "s1",
+    "name": "Budget",
+    "mimeType": SHEET_MIME,
+    "webViewLink": "https://docs.google.com/spreadsheets/d/s1",
+}
 
 
 def test_sample_with_args_skips_pickers(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_META
     workspace.sample.return_value = [{"A": "1"}]
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert cmd_vibe(sample_args(spreadsheet_id="s1", cell_range="Sheet1")) == 0
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="Sheet1"),
+    ):
+        assert cmd_snoop(sample_args(target="s1", cell_range="Sheet1")) == 0
 
     workspace.sample.assert_called_once_with("s1", "Sheet1", limit=None)
     assert "A" in capsys.readouterr().out
@@ -35,13 +49,14 @@ def test_sample_with_args_skips_pickers(
 
 def test_sample_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_META
     workspace.sample.return_value = [{"A": "1"}]
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert (
-            cmd_vibe(sample_args(spreadsheet_id="s1", cell_range="Sheet1", json=True))
-            == 0
-        )
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="Sheet1"),
+    ):
+        assert cmd_snoop(sample_args(target="s1", cell_range="Sheet1", json=True)) == 0
 
     assert '"A": "1"' in capsys.readouterr().out
 
@@ -89,9 +104,13 @@ def test_sample_echoes_replayable_command(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_META
     workspace.sample.return_value = []
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        cmd_vibe(sample_args(spreadsheet_id="s1", cell_range="A1:B2"))
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="A1:B2"),
+    ):
+        cmd_snoop(sample_args(target="s1", cell_range="A1:B2"))
 
-    assert "gfunk vibe" in capsys.readouterr().err
+    assert "gfunk snoop" in capsys.readouterr().err

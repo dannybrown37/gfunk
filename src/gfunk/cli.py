@@ -9,16 +9,101 @@ from pathlib import Path
 from typing import Any
 
 
+COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
+    (
+        "auth",
+        [
+            (
+                "mount-up",
+                ["setup", "login"],
+                "Create and install your own OAuth client, then sign in",
+            ),
+        ],
+    ),
+    (
+        "browse & read",
+        [
+            (
+                "snoop",
+                ["browse"],
+                "Walk folders, read files, view sheets — your Drive window",
+            ),
+        ],
+    ),
+    (
+        "act on files",
+        [
+            ("drop", ["upload"], "Upload local files to Drive"),
+            (
+                "bounce",
+                ["export"],
+                "Export a Google Workspace file (Sheets→CSV/JSON, Docs→txt/html)",
+            ),
+            ("regulate", ["audit"], "Audit who can reach the Drive files you own"),
+        ],
+    ),
+    (
+        "apps",
+        [
+            (
+                "dj",
+                ["scripts"],
+                "Open your Apps Script dashboard, triggers, runs, or a project",
+            ),
+            (
+                "mothership",
+                ["mcp"],
+                "MCP server — install into clients or serve over stdio",
+            ),
+        ],
+    ),
+]
+
+
+def _grouped_help(parser: argparse.ArgumentParser) -> str:
+    import os
+    import textwrap
+
+    try:
+        cols = os.get_terminal_size().columns
+    except OSError:
+        cols = 80
+    indent = 30
+    wrap_width = max(20, cols - indent)
+    bold = "\033[1m"
+    reset = "\033[0m"
+
+    lines = [
+        f"usage: {parser.prog} [-h] [--version] <command> ...\n",
+        parser.description or "",
+        "",
+    ]
+    for group_name, commands in COMMAND_GROUPS:
+        lines.append(f"{bold}{group_name}:{reset}")
+        for name, aliases, help_text in commands:
+            label = f"  {name} ({', '.join(aliases)})"
+            padding = max(2, indent - len(label))
+            wrapped = textwrap.wrap(help_text, wrap_width)
+            lines.append(f"{label}{' ' * padding}{wrapped[0]}")
+            for cont in wrapped[1:]:
+                lines.append(f"{' ' * indent}{cont}")
+        lines.append("")
+    lines.append(f"{bold}options:{reset}")
+    lines.append(f"  {'--help':<{indent - 2}}show this help message and exit")
+    lines.append(f"  {'--version':<{indent - 2}}show program's version number and exit")
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gfunk",
         description="Programmatic Google Workspace access — CLI and MCP server.",
         formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40),
     )
+    parser.format_help = lambda: _grouped_help(parser)  # type: ignore[method-assign]
     parser.add_argument("--version", action="version", version=version("gfunk"))
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
-    # "setup" is the word a new user types blind; "mount-up" is the one we mean.
     mount_up = sub.add_parser(
         "mount-up",
         aliases=["setup", "login"],
@@ -48,72 +133,48 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-sign-in", action="store_true", help="Install only; don't sign in"
     )
 
-    # "browse" is the word a new user types blind; "snoop" is the one we mean.
     snoop = sub.add_parser(
         "snoop",
         aliases=["browse"],
-        help="Walk your Drive folders — open or move files",
+        help="Walk folders, read files, view sheets — your Drive window",
     )
     snoop.add_argument(
-        "folder", nargs="?", help="Folder id to start in (default: root)"
+        "target", nargs="?", help="File or folder id (default: root folder)"
     )
-    snoop.add_argument("--limit", type=int, default=200)
-
-    # "sheet"/"sample" are aliases; "vibe" is the one we mean.
-    vibe = sub.add_parser(
-        "vibe",
-        aliases=["sheet"],
-        help="Interactive spreadsheet viewer — filter and search",
+    snoop.add_argument(
+        "cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50' (sheets only)"
     )
-    vibe.add_argument("spreadsheet_id", nargs="?")
-    vibe.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
-    vibe.add_argument("--limit", type=int, default=None)
-    vibe.add_argument(
-        "--json", action="store_true", help="Emit JSON instead of a table"
-    )
-    vibe.add_argument("--raw", action="store_true", help="Plain table output (no TUI)")
-
-    regulate = sub.add_parser(
-        "regulate",
-        aliases=["audit"],
-        help="Audit who can reach the Drive files you own",
-    )
-    regulate.add_argument("--limit", type=int, default=200)
-    regulate.add_argument(
-        "--all", action="store_true", help="Include files you have not shared"
-    )
-    regulate.add_argument(
-        "--json", action="store_true", help="Emit the audit as JSON instead of a table"
-    )
-
-    # "read" is the word a new user types blind; "peep" is the one we mean.
-    peep = sub.add_parser(
-        "peep",
-        aliases=["read"],
-        help="Read a Drive file in the terminal, or open it in the browser",
-    )
-    peep.add_argument("file_id", nargs="?", help="Drive file id")
-    peep.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50' (sheets)")
-    peep.add_argument(
+    snoop.add_argument("--limit", type=int, default=None, help="Max items or rows")
+    snoop.add_argument(
         "--format",
         dest="fmt",
         default=None,
         choices=["txt", "md", "html"],
         help="Doc output format (default: txt)",
     )
-    peep.add_argument(
+    snoop.add_argument(
         "--json", action="store_true", help="Emit JSON instead of a table (sheets)"
     )
-    peep.add_argument("--limit", type=int, default=None, help="Max rows (sheets)")
-    peep.add_argument(
+    snoop.add_argument(
         "--output",
         "-o",
         type=Path,
         help="Write to file instead of stdout",
     )
-    peep.add_argument(
-        "--open", action="store_true", help="Open in browser instead of printing"
+    snoop.add_argument(
+        "--open", action="store_true", help="Open in browser instead of reading"
     )
+    snoop.add_argument(
+        "--raw", action="store_true", help="Plain table output, no TUI (sheets)"
+    )
+
+    drop = sub.add_parser(
+        "drop",
+        aliases=["upload"],
+        help="Upload local files to Drive",
+    )
+    drop.add_argument("files", nargs="+", type=Path, help="Local files to upload")
+    drop.add_argument("--to", help="Destination folder id (default: root, or pick)")
 
     bounce = sub.add_parser(
         "bounce",
@@ -137,6 +198,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sheet tab name (defaults to first tab)",
     )
 
+    regulate = sub.add_parser(
+        "regulate",
+        aliases=["audit"],
+        help="Audit who can reach the Drive files you own",
+    )
+    regulate.add_argument("--limit", type=int, default=200)
+    regulate.add_argument(
+        "--all", action="store_true", help="Include files you have not shared"
+    )
+    regulate.add_argument(
+        "--json", action="store_true", help="Emit the audit as JSON instead of a table"
+    )
+
     dj = sub.add_parser(
         "dj",
         aliases=["scripts"],
@@ -147,14 +221,6 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         help="'runs', 'triggers', or a script id to open directly",
     )
-
-    drop = sub.add_parser(
-        "drop",
-        aliases=["upload"],
-        help="Upload local files to Drive",
-    )
-    drop.add_argument("files", nargs="+", type=Path, help="Local files to upload")
-    drop.add_argument("--to", help="Destination folder id (default: root, or pick)")
 
     mothership = sub.add_parser(
         "mothership",
@@ -476,24 +542,87 @@ def snoop_entries(
 
 
 def cmd_snoop(args: argparse.Namespace) -> int:
-    """Walk Drive like a filesystem: descend into folders, escape to climb back."""
+    """Walk folders, read files, view sheets — your Drive window."""
     from gfunk.workspace import Workspace
 
     with status("Signing in to Google"):
         workspace = Workspace.connect()
 
-    root = args.folder or "root"
-    stack: list[tuple[str, str]] = [(root, "My Drive" if root == "root" else root)]
+    target = args.target
+
+    if target:
+        return _snoop_target(args, workspace, target)
+
+    if getattr(args, "open", False):
+        return _snoop_open_picker(workspace)
+
+    return _snoop_walk(workspace, args)
+
+
+def _snoop_target(args: argparse.Namespace, workspace: Any, target: str) -> int:
+    from gfunk.workspace import DOC_MIME, FOLDER_MIME, SHEET_MIME
+
+    with status("Reading file metadata"):
+        meta = workspace.file_meta(target)
+    mime = meta.get("mimeType", "")
+    name = meta.get("name", target)
+
+    if mime == FOLDER_MIME:
+        return _snoop_walk(workspace, args, start_id=target, start_name=name)
+
+    if getattr(args, "open", False):
+        open_in_browser(meta)
+        print(f"Opened {name} in your browser.", file=sys.stderr)
+        return emit(meta, f"gfunk snoop {quote(target)} --open")
+
+    if mime == SHEET_MIME:
+        return _snoop_sheet(args, workspace, target, name)
+
+    if mime == DOC_MIME:
+        return _snoop_doc(args, workspace, target, name)
+
+    print(
+        f"{name} is not a Doc or Sheet. Use 'bounce' for other file types.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def _snoop_open_picker(workspace: Any) -> int:
+    file_meta = pick_file(workspace, mime_types=None, header="Pick a file")
+    if not file_meta:
+        return 0
+    open_in_browser(file_meta)
+    print(
+        f"Opened {file_meta.get('name', '')} in your browser.",
+        file=sys.stderr,
+    )
+    return emit(file_meta, f"gfunk snoop {quote(file_meta['id'])} --open")
+
+
+SNOOP_ACTIONS = ["Open in browser", "Print", "Move"]
+
+
+def _snoop_walk(
+    workspace: Any,
+    args: argparse.Namespace,
+    *,
+    start_id: str = "root",
+    start_name: str | None = None,
+) -> int:
+    limit = args.limit or 200
+    name = start_name or ("My Drive" if start_id == "root" else start_id)
+    stack: list[tuple[str, str]] = [(start_id, name)]
 
     if not can_browse():
-        listing = workspace.children(root, limit=args.limit)
-        return emit(listing, f"gfunk snoop {quote(root)} --limit {args.limit}")
+        listing = workspace.children(start_id, limit=limit)
+        return emit(listing, f"gfunk snoop {quote(start_id)} --limit {limit}")
 
     while stack:
         folder_id, _ = stack[-1]
-        path = "/".join(name for _, name in stack)
+        path = "/".join(n for _, n in stack)
         with status(f"Listing {path}"):
-            items = workspace.children(folder_id, limit=args.limit)
+            items = workspace.children(folder_id, limit=limit)
 
         entries = snoop_entries(items, up=len(stack) > 1)
         chosen = fzf_pick(
@@ -515,16 +644,13 @@ def cmd_snoop(args: argparse.Namespace) -> int:
         action = fzf_pick(SNOOP_ACTIONS, item["name"], abort_ok=True)
         if action is None or action == "Open in browser":
             open_in_browser(item)
-            return emit(item, f"gfunk snoop {quote(folder_id)} --limit {args.limit}")
+            return emit(item, f"gfunk snoop {quote(folder_id)} --limit {limit}")
         if action == "Print":
             return _snoop_print(workspace, item)
         if action == "Move":
             return _snoop_move(workspace, item)
 
     return 0
-
-
-SNOOP_ACTIONS = ["Open in browser", "Print", "Move"]
 
 
 def _snoop_print(workspace: Any, file_meta: dict[str, Any]) -> int:
@@ -567,6 +693,84 @@ def _snoop_move(workspace: Any, file_meta: dict[str, Any]) -> int:
 
     workspace.move(file_id, add_parent=destination, remove_parent=current_parent)
     print(f"Moved {name} → {dest_name}", file=sys.stderr)
+    return 0
+
+
+SNOOP_MIME_MAP = {
+    "txt": "text/plain",
+    "md": "text/plain",
+    "html": "text/html",
+}
+
+
+def _snoop_doc(
+    args: argparse.Namespace, workspace: Any, file_id: str, name: str
+) -> int:
+    fmt = getattr(args, "fmt", None) or "txt"
+    export_mime = SNOOP_MIME_MAP[fmt]
+
+    with status(f"Reading {name}"):
+        data = workspace.export(file_id, export_mime)
+
+    text = data.decode()
+    output = getattr(args, "output", None)
+    if output:
+        output.write_text(text)
+        print(f"Wrote {len(text)} chars to {output}", file=sys.stderr)
+    else:
+        print(text, end="")
+
+    replay = f"gfunk snoop {quote(file_id)} --format {fmt}"
+    if output:
+        replay += f" -o {quote(str(output))}"
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    return 0
+
+
+def _snoop_sheet(
+    args: argparse.Namespace, workspace: Any, file_id: str, name: str
+) -> int:
+    cell_range = args.cell_range
+    if not cell_range:
+        cell_range = pick_range(workspace, file_id)
+    if not cell_range:
+        cell_range = prompt_required("Range (e.g. Sheet1 or A1:D50): ", "a range")
+
+    with status(f"Reading {name}"):
+        rows = workspace.sample(file_id, cell_range, limit=args.limit)
+
+    replay = f"gfunk snoop {quote(file_id)} {quote(cell_range)}"
+    output = getattr(args, "output", None)
+
+    if getattr(args, "json", False):
+        if output:
+            output.write_text(json.dumps(rows, indent=2))
+            print(f"Wrote {len(rows)} records to {output}", file=sys.stderr)
+            print(
+                f"\nRun again with:\n  {replay} --json -o {quote(str(output))}",
+                file=sys.stderr,
+            )
+            return 0
+        return emit(rows, replay + " --json")
+
+    if output:
+        from tabulate import tabulate
+
+        output.write_text(tabulate(rows, headers="keys", tablefmt="simple"))
+        print(f"Wrote {len(rows)} rows to {output}", file=sys.stderr)
+        print(
+            f"\nRun again with:\n  {replay} -o {quote(str(output))}",
+            file=sys.stderr,
+        )
+        return 0
+
+    if getattr(args, "raw", False) or not sys.stdin.isatty():
+        return emit_table(rows, replay + " --raw")
+
+    from gfunk.vibe import VibeApp
+
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    VibeApp(rows).run()
     return 0
 
 
@@ -616,39 +820,6 @@ def pick_range(workspace: Any, spreadsheet_id: str) -> str | None:
     return fzf_pick(tabs, "Pick a tab", abort_ok=True)
 
 
-def cmd_vibe(args: argparse.Namespace) -> int:
-    from gfunk.workspace import Workspace
-
-    with status("Signing in to Google"):
-        workspace = Workspace.connect()
-
-    sheet = args.spreadsheet_id
-    if not sheet:
-        sheet = pick_spreadsheet(workspace)
-    if not sheet:
-        sheet = prompt_required("Spreadsheet id: ", "a spreadsheet id")
-
-    cell_range = args.cell_range
-    if not cell_range:
-        cell_range = pick_range(workspace, sheet)
-    if not cell_range:
-        cell_range = prompt_required("Range (e.g. A1:D50): ", "a range")
-
-    with status("Pulling rows"):
-        rows = workspace.sample(sheet, cell_range, limit=args.limit)
-    replay = f"gfunk vibe {quote(sheet)} {quote(cell_range)}"
-    if args.json:
-        return emit(rows, replay + " --json")
-    if args.raw or not sys.stdin.isatty():
-        return emit_table(rows, replay + " --raw")
-
-    from gfunk.vibe import VibeApp
-
-    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
-    VibeApp(rows).run()
-    return 0
-
-
 def _default_format(mime: str) -> str:
     from gfunk.workspace import DOC_MIME, SHEET_MIME
 
@@ -674,114 +845,6 @@ def _bounce_as_json(
     else:
         print(payload)
     return 0
-
-
-PEEP_MIME_MAP = {
-    "txt": "text/plain",
-    "md": "text/plain",
-    "html": "text/html",
-}
-
-
-def cmd_peep(args: argparse.Namespace) -> int:
-    from gfunk.workspace import DOC_MIME, SHEET_MIME, Workspace
-
-    peepable = {DOC_MIME, SHEET_MIME}
-
-    with status("Signing in to Google"):
-        workspace = Workspace.connect()
-
-    file_id = args.file_id
-    file_meta = None
-
-    if not file_id:
-        mime_filter = None if args.open else peepable
-        header = "Pick a file" if args.open else "Pick a Doc or Sheet to read"
-        file_meta = pick_file(workspace, mime_types=mime_filter, header=header)
-        if not file_meta:
-            return 0
-
-    if file_meta:
-        file_id = file_meta["id"]
-    else:
-        with status("Reading file metadata"):
-            file_meta = workspace.file_meta(file_id)
-
-    mime = file_meta.get("mimeType", "")
-    name = file_meta.get("name", file_id)
-
-    if args.open:
-        open_in_browser(file_meta)
-        print(f"Opened {name} in your browser.", file=sys.stderr)
-        return emit(file_meta, f"gfunk peep {quote(file_id)} --open")
-
-    if mime not in peepable:
-        print(
-            f"{name} is not a Doc or Sheet. Use 'bounce' for other file types.",
-            file=sys.stderr,
-        )
-        return 1
-
-    if mime == SHEET_MIME:
-        return _peep_sheet(args, workspace, file_id, name)
-    return _peep_doc(args, workspace, file_id, name)
-
-
-def _peep_doc(args: argparse.Namespace, workspace: Any, file_id: str, name: str) -> int:
-    fmt = args.fmt or "txt"
-    export_mime = PEEP_MIME_MAP[fmt]
-
-    with status(f"Reading {name}"):
-        data = workspace.export(file_id, export_mime)
-
-    text = data.decode()
-    if args.output:
-        args.output.write_text(text)
-        print(f"Wrote {len(text)} chars to {args.output}", file=sys.stderr)
-    else:
-        print(text, end="")
-
-    replay = f"gfunk peep {quote(file_id)} --format {fmt}"
-    if args.output:
-        replay += f" -o {quote(str(args.output))}"
-    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
-    return 0
-
-
-def _peep_sheet(
-    args: argparse.Namespace, workspace: Any, file_id: str, name: str
-) -> int:
-    cell_range = args.cell_range
-    if not cell_range:
-        cell_range = pick_range(workspace, file_id)
-    if not cell_range:
-        cell_range = prompt_required("Range (e.g. Sheet1 or A1:D50): ", "a range")
-
-    with status(f"Reading {name}"):
-        rows = workspace.sample(file_id, cell_range, limit=args.limit)
-
-    replay = f"gfunk peep {quote(file_id)} {quote(cell_range)}"
-    if args.json:
-        if args.output:
-            args.output.write_text(json.dumps(rows, indent=2))
-            print(f"Wrote {len(rows)} records to {args.output}", file=sys.stderr)
-            print(
-                f"\nRun again with:\n  {replay} --json -o {quote(str(args.output))}",
-                file=sys.stderr,
-            )
-            return 0
-        return emit(rows, replay + " --json")
-    if args.output:
-        from tabulate import tabulate
-
-        args.output.write_text(tabulate(rows, headers="keys", tablefmt="simple"))
-        print(f"Wrote {len(rows)} rows to {args.output}", file=sys.stderr)
-        print(
-            f"\nRun again with:\n  {replay} -o {quote(str(args.output))}",
-            file=sys.stderr,
-        )
-        return 0
-    return emit_table(rows, replay)
 
 
 def cmd_drop(args: argparse.Namespace) -> int:
@@ -1145,10 +1208,6 @@ COMMANDS = {
     "login": cmd_mount_up,
     "snoop": cmd_snoop,
     "browse": cmd_snoop,
-    "vibe": cmd_vibe,
-    "sheet": cmd_vibe,
-    "peep": cmd_peep,
-    "read": cmd_peep,
     "drop": cmd_drop,
     "upload": cmd_drop,
     "bounce": cmd_bounce,

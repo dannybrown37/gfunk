@@ -3,85 +3,111 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gfunk.cli import cmd_vibe
+from gfunk.cli import COMMANDS, cmd_snoop
+from gfunk.workspace import SHEET_MIME
 
 
-def vibe_args(**overrides: object) -> argparse.Namespace:
+def snoop_sheet_args(**overrides: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
-        "spreadsheet_id": None,
+        "target": None,
         "cell_range": None,
-        "limit": None,
+        "fmt": None,
         "json": False,
+        "limit": None,
+        "output": None,
+        "open": False,
         "raw": False,
     }
     return argparse.Namespace(**{**defaults, **overrides})
 
 
-def test_vibe_raw_prints_tabulate_table(capsys: pytest.CaptureFixture[str]) -> None:
+SHEET_FILE = {
+    "id": "s1",
+    "name": "Budget",
+    "mimeType": SHEET_MIME,
+    "webViewLink": "https://docs.google.com/spreadsheets/d/s1",
+}
+
+
+def test_snoop_sheet_raw_prints_tabulate_table(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
     workspace.sample.return_value = [{"Name": "Alice", "Score": "95"}]
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert (
-            cmd_vibe(vibe_args(spreadsheet_id="s1", cell_range="Sheet1", raw=True)) == 0
-        )
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="Sheet1"),
+    ):
+        assert cmd_snoop(snoop_sheet_args(target="s1", raw=True)) == 0
 
     out = capsys.readouterr().out
     assert "Name" in out
     assert "Alice" in out
 
 
-def test_vibe_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
+def test_snoop_sheet_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
     workspace.sample.return_value = [{"A": "1"}]
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        assert (
-            cmd_vibe(vibe_args(spreadsheet_id="s1", cell_range="Sheet1", json=True))
-            == 0
-        )
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="Sheet1"),
+    ):
+        assert cmd_snoop(snoop_sheet_args(target="s1", json=True)) == 0
 
     assert '"A": "1"' in capsys.readouterr().out
 
 
-def test_vibe_echoes_replayable_command(
+def test_snoop_sheet_echoes_replayable_command(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
     workspace.sample.return_value = []
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        cmd_vibe(vibe_args(spreadsheet_id="s1", cell_range="A1:B2", raw=True))
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="A1:B2"),
+    ):
+        cmd_snoop(snoop_sheet_args(target="s1", raw=True))
 
-    assert "gfunk vibe" in capsys.readouterr().err
+    assert "gfunk snoop" in capsys.readouterr().err
 
 
-def test_vibe_with_limit() -> None:
+def test_snoop_sheet_with_limit() -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
     workspace.sample.return_value = [{"A": "1"}]
 
-    with patch("gfunk.workspace.Workspace.connect", return_value=workspace):
-        cmd_vibe(vibe_args(spreadsheet_id="s1", cell_range="Sheet1", limit=5, raw=True))
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="Sheet1"),
+    ):
+        cmd_snoop(snoop_sheet_args(target="s1", limit=5, raw=True))
 
     workspace.sample.assert_called_once_with("s1", "Sheet1", limit=5)
 
 
-def test_vibe_no_tty_falls_back_to_raw(capsys: pytest.CaptureFixture[str]) -> None:
-    """When not a TTY and no --raw/--json, vibe should fall back to raw table output."""
+def test_snoop_sheet_no_tty_falls_back_to_raw(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     workspace = MagicMock()
+    workspace.file_meta.return_value = SHEET_FILE
     workspace.sample.return_value = [{"X": "1"}]
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.pick_range", return_value="Sheet1"),
         patch("sys.stdin") as mock_stdin,
     ):
         mock_stdin.isatty.return_value = False
-        assert cmd_vibe(vibe_args(spreadsheet_id="s1", cell_range="Sheet1")) == 0
+        assert cmd_snoop(snoop_sheet_args(target="s1")) == 0
 
     assert "X" in capsys.readouterr().out
 
 
-def test_sheet_alias_still_works() -> None:
-    from gfunk.cli import COMMANDS
-
-    assert COMMANDS["sheet"] is cmd_vibe
+def test_browse_alias_still_works() -> None:
+    assert COMMANDS["browse"] is cmd_snoop
