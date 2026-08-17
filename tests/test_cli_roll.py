@@ -94,10 +94,23 @@ def test_picking_a_file_opens_it_and_emits_it(
     workspace = MagicMock()
     workspace.children.return_value = [FILE]
 
+    call_count = 0
+
+    def pick_file_then_open(
+        candidates: list[object], _header: str, **_kw: bool
+    ) -> str | None:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            for c in candidates:
+                if str(c).startswith("Budget"):
+                    return str(c)
+        return "Open in browser"
+
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", side_effect=_pick_by_name("Budget")),
+        patch("gfunk.cli.fzf_pick", side_effect=pick_file_then_open),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
         assert cmd_snoop(snoop_args()) == 0

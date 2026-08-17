@@ -11,7 +11,7 @@ from typing import Any
 
 COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
     (
-        "the juice (auth)",
+        "the plug (auth)",
         [
             (
                 "mount-up",
@@ -40,16 +40,16 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
         "the game (management)",
         [
             ("regulate", ["audit"], "Audit who can reach the Drive files you own"),
-        ],
-    ),
-    (
-        "the studio (apps)",
-        [
             (
                 "dj",
                 ["scripts"],
                 "Open your Apps Script dashboard, triggers, runs, or a project",
             ),
+        ],
+    ),
+    (
+        "the studio (apps)",
+        [
             (
                 "mothership",
                 ["mcp"],
@@ -600,7 +600,16 @@ def _snoop_open_picker(workspace: Any) -> int:
     return emit(file_meta, f"gfunk snoop {quote(file_meta['id'])} --open")
 
 
-SNOOP_ACTIONS = ["Open in browser", "Print", "Move"]
+SNOOP_ACTIONS_BASE = ["Open in browser", "Print", "Move"]
+
+
+def _snoop_actions(item: dict[str, Any]) -> list[str]:
+    from gfunk.workspace import DOC_MIME, SHEET_MIME
+
+    mime = item.get("mimeType", "")
+    if mime in (SHEET_MIME, DOC_MIME):
+        return ["View", *SNOOP_ACTIONS_BASE]
+    return list(SNOOP_ACTIONS_BASE)
 
 
 def _snoop_walk(
@@ -641,8 +650,12 @@ def _snoop_walk(
             stack.append((item["id"], item["name"]))
             continue
 
-        action = fzf_pick(SNOOP_ACTIONS, item["name"], abort_ok=True)
-        if action is None or action == "Open in browser":
+        action = fzf_pick(_snoop_actions(item), item["name"], abort_ok=True)
+        if action is None:
+            continue
+        if action == "View":
+            return _snoop_target(args, workspace, item["id"])
+        if action == "Open in browser":
             open_in_browser(item)
             return emit(item, f"gfunk snoop {quote(folder_id)} --limit {limit}")
         if action == "Print":
