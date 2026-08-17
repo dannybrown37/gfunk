@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from googleapiclient.discovery import build
@@ -238,6 +239,18 @@ class Workspace:
                 removeParents=remove_parent,
                 fields="id, name, parents",
             )
+            .execute()
+        )
+
+    def upload(self, path: Path, *, parent: str = "root") -> dict[str, Any]:
+        """Upload a local file to Drive."""
+        from googleapiclient.http import MediaFileUpload
+
+        media = MediaFileUpload(str(path), resumable=True)
+        metadata: dict[str, Any] = {"name": path.name, "parents": [parent]}
+        return dict(
+            self.drive.files()
+            .create(body=metadata, media_body=media, fields="id, name, webViewLink")
             .execute()
         )
 

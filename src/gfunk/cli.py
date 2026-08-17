@@ -148,6 +148,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="'runs', 'triggers', or a script id to open directly",
     )
 
+    drop = sub.add_parser(
+        "drop",
+        aliases=["upload"],
+        help="Upload local files to Drive",
+    )
+    drop.add_argument("files", nargs="+", type=Path, help="Local files to upload")
+    drop.add_argument("--to", help="Destination folder id (default: root, or pick)")
+
     mothership = sub.add_parser(
         "mothership",
         aliases=["mcp"],
@@ -776,6 +784,39 @@ def _peep_sheet(
     return emit_table(rows, replay)
 
 
+def cmd_drop(args: argparse.Namespace) -> int:
+    from gfunk.workspace import Workspace
+
+    for f in args.files:
+        if not f.exists():
+            print(f"File not found: {f}", file=sys.stderr)
+            return 1
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    parent = args.to
+    if not parent:
+        if can_browse():
+            result = pick_destination(workspace)
+            if result is None:
+                return 0
+            parent, _ = result
+        else:
+            parent = "root"
+
+    for f in args.files:
+        with status(f"Uploading {f.name}"):
+            meta = workspace.upload(f, parent=parent)
+        print(f"Uploaded {meta['name']} → {meta.get('id', '?')}", file=sys.stderr)
+
+    replay = f"gfunk drop {' '.join(quote(str(f)) for f in args.files)}"
+    if args.to:
+        replay += f" --to {quote(args.to)}"
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    return 0
+
+
 def cmd_bounce(args: argparse.Namespace) -> int:
     import sys as _sys
 
@@ -1108,6 +1149,8 @@ COMMANDS = {
     "sheet": cmd_vibe,
     "peep": cmd_peep,
     "read": cmd_peep,
+    "drop": cmd_drop,
+    "upload": cmd_drop,
     "bounce": cmd_bounce,
     "export": cmd_bounce,
     "regulate": cmd_regulate,
