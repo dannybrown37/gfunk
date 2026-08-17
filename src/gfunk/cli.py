@@ -140,6 +140,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sheet tab name (defaults to first tab)",
     )
 
+    dj = sub.add_parser(
+        "dj",
+        aliases=["scripts"],
+        help="Open your Apps Script dashboard, triggers, runs, or a project",
+    )
+    dj.add_argument(
+        "page",
+        nargs="?",
+        help="'runs', 'triggers', or a script id to open directly",
+    )
+
     slide = sub.add_parser(
         "slide",
         aliases=["move"],
@@ -1030,6 +1041,74 @@ def pick_destination(workspace: Any, start: str = "root") -> tuple[str, str] | N
     return None
 
 
+DJ_PAGES: dict[str, tuple[str, str]] = {
+    "runs": (
+        "https://script.google.com/home/executions",
+        "Recent executions — see what ran, what failed, and when",
+    ),
+    "triggers": (
+        "https://script.google.com/home/triggers",
+        "Your triggers — what's scheduled, what's firing",
+    ),
+}
+DJ_HOME = "https://script.google.com/home"
+DJ_PROJECT = "https://script.google.com/d/{script_id}/edit"
+
+
+def cmd_dj(args: argparse.Namespace) -> int:
+    from gfunk.browser import register as register_browser
+
+    page = args.page
+
+    if page and page in DJ_PAGES:
+        url, description = DJ_PAGES[page]
+        register_browser()
+        webbrowser.open(url)
+        print(description)
+        print(f"\nRun again with:\n  gfunk dj {page}", file=sys.stderr)
+        return 0
+
+    if page:
+        url = DJ_PROJECT.format(script_id=page)
+        register_browser()
+        webbrowser.open(url)
+        print(f"Opened script {page} in your browser.")
+        print(f"\nRun again with:\n  gfunk dj {quote(page)}", file=sys.stderr)
+        return 0
+
+    if can_browse():
+        pages = {
+            "My Projects          All your Apps Script projects": "home",
+            "Recent Runs          What ran, what failed, and when": "runs",
+            "My Triggers          What's scheduled, what's firing": "triggers",
+        }
+        chosen = fzf_pick(list(pages), "Apps Script — pick a page", abort_ok=True)
+        if chosen is None:
+            return 0
+        picked = pages[chosen]
+        if picked == "home":
+            url = DJ_HOME
+        else:
+            url, _ = DJ_PAGES[picked]
+        register_browser()
+        webbrowser.open(url)
+        print(
+            f"\nRun again with:\n  gfunk dj{'' if picked == 'home' else ' ' + picked}",
+            file=sys.stderr,
+        )
+        return 0
+
+    register_browser()
+    webbrowser.open(DJ_HOME)
+    print("Apps Script dashboard")
+    print("\nPages:")
+    print("  gfunk dj              Your projects")
+    print("  gfunk dj runs         Recent executions")
+    print("  gfunk dj triggers     Your triggers")
+    print("  gfunk dj <script_id>  Open a specific project")
+    return 0
+
+
 def cmd_slide(args: argparse.Namespace) -> int:
     from gfunk.workspace import Workspace
 
@@ -1099,6 +1178,8 @@ COMMANDS = {
     "export": cmd_bounce,
     "regulate": cmd_regulate,
     "audit": cmd_regulate,
+    "dj": cmd_dj,
+    "scripts": cmd_dj,
     "slide": cmd_slide,
     "move": cmd_slide,
     "mothership": cmd_mothership,
