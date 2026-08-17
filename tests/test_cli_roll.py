@@ -45,6 +45,12 @@ def test_the_parent_entry_leads_the_listing_only_below_the_root() -> None:
     assert "../" not in snoop_entries([FILE], up=False)
 
 
+def _label(candidate: object) -> str:
+    """The display half of an "id\\tlabel" fzf candidate."""
+    _, _, label = str(candidate).partition("\t")
+    return label
+
+
 def _pick_by_name(
     name_prefix: str,
 ) -> Callable[[list[object], str], str | None]:
@@ -52,7 +58,7 @@ def _pick_by_name(
 
     def picker(candidates: list[object], _header: str, **_kw: bool) -> str | None:
         for c in candidates:
-            if str(c).startswith(name_prefix):
+            if _label(c).startswith(name_prefix):
                 return str(c)
         return None
 
@@ -72,7 +78,7 @@ def test_picking_a_folder_descends_and_lists_it() -> None:
         call_count += 1
         if call_count == 1:
             for c in candidates:
-                if str(c).startswith("Reports/"):
+                if _label(c).startswith("Reports/"):
                     return str(c)
         return None
 
@@ -103,7 +109,7 @@ def test_picking_a_file_opens_it_and_emits_it(
         call_count += 1
         if call_count == 1:
             for c in candidates:
-                if str(c).startswith("Budget"):
+                if _label(c).startswith("Budget"):
                     return str(c)
         return "Open in browser"
 
@@ -148,7 +154,7 @@ def test_escape_below_the_root_climbs_back_up_a_level() -> None:
         call_count += 1
         if call_count == 1:
             for c in candidates:
-                if str(c).startswith("Reports/"):
+                if _label(c).startswith("Reports/"):
                     return str(c)
         return None
 
@@ -179,10 +185,12 @@ def test_the_parent_entry_climbs_the_same_way_escape_does() -> None:
         call_count += 1
         if call_count == 1:
             for c in candidates:
-                if str(c).startswith("Reports/"):
+                if _label(c).startswith("Reports/"):
                     return str(c)
         if call_count == 2:
-            return "../"
+            for c in candidates:
+                if _label(c) == "../":
+                    return str(c)
         return None
 
     with (
@@ -224,7 +232,7 @@ def test_the_header_shows_the_path_walked_so_far() -> None:
         headers.append(header)
         if len(headers) == 1:
             for c in candidates:
-                if str(c).startswith("Reports/"):
+                if _label(c).startswith("Reports/"):
                     return str(c)
         return None
 

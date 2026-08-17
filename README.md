@@ -50,6 +50,7 @@ gfunk snoop                                 # walk your Drive folders
 gfunk snoop <file-id>                       # read a Doc or Sheet in the terminal
 gfunk snoop <file-id> --open                # open a Drive file in your browser
 gfunk snoop <sheet-id> 'Sheet1!A1:D50'      # interactive spreadsheet viewer (TUI)
+gfunk snoop <file-id> --peek                # quick non-interactive preview (used by browse too)
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk regulate                              # audit who can see your files
 gfunk dj                                    # open Apps Script dashboard
@@ -150,7 +151,9 @@ gfunk/
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
+|   |-- test_cli_snoop_delete.py
 |   |-- test_cli_snoop_move.py
+|   |-- test_cli_snoop_peek.py
 |   |-- test_cli_vibe.py
 |   |-- test_errors.py
 |   |-- test_mcp_config.py

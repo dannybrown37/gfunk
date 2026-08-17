@@ -177,6 +177,39 @@ def test_fzf_is_skipped_entirely_off_a_tty() -> None:
     ran.assert_not_called()
 
 
+def test_fzf_pick_wires_up_a_preview_command_when_given_one() -> None:
+    from gfunk.cli import fzf_pick
+
+    done = subprocess.CompletedProcess(args=[], returncode=0, stdout="id1\talpha\n")
+    with (
+        patch("shutil.which", return_value="/usr/bin/fzf"),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("subprocess.run", return_value=done) as ran,
+    ):
+        chosen = fzf_pick(["id1\talpha"], "pick", preview="gfunk snoop {1} --peek")
+
+    assert chosen == "id1\talpha"
+    args = ran.call_args.args[0]
+    assert "--preview" in args
+    assert "gfunk snoop {1} --peek" in args
+    assert "--delimiter" in args
+    assert "--with-nth" in args
+
+
+def test_fzf_pick_omits_preview_flags_when_no_preview_given() -> None:
+    from gfunk.cli import fzf_pick
+
+    done = subprocess.CompletedProcess(args=[], returncode=0, stdout="alpha\n")
+    with (
+        patch("shutil.which", return_value="/usr/bin/fzf"),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("subprocess.run", return_value=done) as ran,
+    ):
+        fzf_pick(["alpha"], "pick")
+
+    assert "--preview" not in ran.call_args.args[0]
+
+
 def regulate_args(**overrides: object) -> argparse.Namespace:
     defaults = {"limit": 200, "all": False, "json": False}
     return argparse.Namespace(**{**defaults, **overrides})

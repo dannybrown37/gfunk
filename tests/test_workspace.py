@@ -166,6 +166,23 @@ def test_move_updates_parents() -> None:
     assert result["parents"] == ["dest-folder"]
 
 
+def test_trash_marks_a_file_trashed() -> None:
+    drive = MagicMock()
+    drive.files.return_value.update.return_value.execute.return_value = {
+        "id": "f1",
+        "name": "Budget",
+        "trashed": True,
+    }
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    result = workspace.trash("f1")
+
+    drive.files.return_value.update.assert_called_once_with(
+        fileId="f1", body={"trashed": True}, fields="id, name, trashed"
+    )
+    assert result["trashed"] is True
+
+
 def test_file_meta_includes_parents() -> None:
     drive = MagicMock()
     drive.files.return_value.get.return_value.execute.return_value = {

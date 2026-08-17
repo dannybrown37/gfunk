@@ -322,6 +322,14 @@ class Workspace:
             .execute()
         )
 
+    def trash(self, file_id: str) -> dict[str, Any]:
+        """Move a file to trash — recoverable, unlike permanent delete."""
+        return dict(
+            self.drive.files()
+            .update(fileId=file_id, body={"trashed": True}, fields="id, name, trashed")
+            .execute()
+        )
+
     def export(self, file_id: str, mime_type: str) -> bytes:
         """Export a Google Workspace file to the given MIME type."""
         return bytes(

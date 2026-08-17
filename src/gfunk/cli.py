@@ -167,6 +167,11 @@ def build_parser() -> argparse.ArgumentParser:
     snoop.add_argument(
         "--raw", action="store_true", help="Plain table output, no TUI (sheets)"
     )
+    snoop.add_argument(
+        "--peek",
+        action="store_true",
+        help="Quick, non-interactive preview (first lines or rows)",
+    )
 
     drop = sub.add_parser(
         "drop",
@@ -363,9 +368,18 @@ def print_walkthrough(project: str | None) -> None:
 
 
 def fzf_pick(
-    candidates: list[Any], header: str, *, abort_ok: bool = False
+    candidates: list[Any],
+    header: str,
+    *,
+    abort_ok: bool = False,
+    preview: str | None = None,
 ) -> str | None:
-    """fzf when it is on PATH; None means fall back to whatever the caller has."""
+    """fzf when it is on PATH; None means fall back to whatever the caller has.
+
+    `preview` is a shell command shown in a side pane as the cursor moves.
+    Candidates must be tab-delimited "id\\tlabel" pairs when it is given, so
+    the command can address the highlighted row's id as `{1}`.
+    """
     import subprocess
     from shutil import which
 
@@ -374,8 +388,20 @@ def fzf_pick(
     # silently swallows the session — which reads as a hang, not as a prompt.
     if not which("fzf") or not sys.stdin.isatty():
         return None
+    args = ["fzf", "--header", header, "--height", "40%", "--reverse"]
+    if preview is not None:
+        args += [
+            "--delimiter",
+            "\t",
+            "--with-nth",
+            "2..",
+            "--preview",
+            preview,
+            "--preview-window",
+            "right:60%:wrap",
+        ]
     result = subprocess.run(  # noqa: S603
-        ["fzf", "--header", header, "--height", "40%", "--reverse"],  # noqa: S607
+        args,
         input="\n".join(str(item) for item in candidates),
         stdout=subprocess.PIPE,
         text=True,
@@ -591,6 +617,9 @@ def _snoop_target(args: argparse.Namespace, workspace: Any, target: str) -> int:
     mime = meta.get("mimeType", "")
     name = meta.get("name", target)
 
+    if getattr(args, "peek", False):
+        return _snoop_peek(workspace, meta)
+
     if mime == FOLDER_MIME:
         return _snoop_walk(workspace, args, start_id=target, start_name=name)
 
@@ -624,7 +653,7 @@ def _snoop_open_picker(workspace: Any) -> int:
     return emit(file_meta, f"gfunk snoop {quote(file_meta['id'])} --open")
 
 
-SNOOP_ACTIONS_BASE = ["Open in browser", "Print", "Move"]
+SNOOP_ACTIONS_BASE = ["Open in browser", "Print", "Move", "Delete"]
 
 
 def _snoop_actions(item: dict[str, Any]) -> list[str]:
@@ -651,6 +680,17 @@ def _snoop_walk(
         listing = workspace.children(start_id, limit=limit)
         return emit(listing, f"gfunk snoop {quote(start_id)} --limit {limit}")
 
+    from shutil import which
+
+    gfunk_bin = quote(which("gfunk") or "gfunk")
+    # fzf single-quotes {1} itself; wrapping it in our own quotes here would
+    # double-quote the value and bake literal quote characters into the id.
+    preview = (
+        "id={1}; "
+        f'if [ -n "$id" ]; then {gfunk_bin} snoop "$id" --peek 2>&1; '
+        'else echo "(back up a level)"; fi'
+    )
+
     while stack:
         folder_id, _ = stack[-1]
         path = "/".join(n for _, n in stack)
@@ -658,17 +698,26 @@ def _snoop_walk(
             items = workspace.children(folder_id, limit=limit)
 
         entries = snoop_entries(items, up=len(stack) > 1)
+        candidates = [
+            f"{item['id'] if item else ''}\t{label}" for label, item in entries.items()
+        ]
         chosen = fzf_pick(
-            list(entries),
+            candidates,
             f"{path} — enter opens, esc goes up",
             abort_ok=True,
+            preview=preview,
         )
 
-        if chosen is None or chosen == UP:
+        if chosen is None:
+            stack.pop()
+            continue
+        _, _, label = chosen.partition("\t")
+
+        if label == UP:
             stack.pop()
             continue
 
-        item = entries[chosen]
+        item = entries[label]
         assert item is not None
         if is_folder(item):
             stack.append((item["id"], item["name"]))
@@ -677,17 +726,32 @@ def _snoop_walk(
         action = fzf_pick(_snoop_actions(item), item["name"], abort_ok=True)
         if action is None:
             continue
-        if action == "View":
-            return _snoop_target(args, workspace, item["id"])
-        if action == "Open in browser":
-            open_in_browser(item)
-            return emit(item, f"gfunk snoop {quote(folder_id)} --limit {limit}")
-        if action == "Print":
-            return _snoop_print(workspace, item)
-        if action == "Move":
-            return _snoop_move(workspace, item)
+        return _snoop_act(
+            args, workspace, item, action, folder_id=folder_id, limit=limit
+        )
 
     return 0
+
+
+def _snoop_act(
+    args: argparse.Namespace,
+    workspace: Any,
+    item: dict[str, Any],
+    action: str,
+    *,
+    folder_id: str,
+    limit: int,
+) -> int:
+    if action == "View":
+        return _snoop_target(args, workspace, item["id"])
+    if action == "Open in browser":
+        open_in_browser(item)
+        return emit(item, f"gfunk snoop {quote(folder_id)} --limit {limit}")
+    if action == "Print":
+        return _snoop_print(workspace, item)
+    if action == "Move":
+        return _snoop_move(workspace, item)
+    return _snoop_delete(workspace, item)
 
 
 def _snoop_print(workspace: Any, file_meta: dict[str, Any]) -> int:
@@ -730,6 +794,54 @@ def _snoop_move(workspace: Any, file_meta: dict[str, Any]) -> int:
 
     workspace.move(file_id, add_parent=destination, remove_parent=current_parent)
     print(f"Moved {name} → {dest_name}", file=sys.stderr)
+    return 0
+
+
+def _snoop_delete(workspace: Any, file_meta: dict[str, Any]) -> int:
+    file_id = file_meta["id"]
+    name = file_meta.get("name", file_id)
+
+    if not sys.stdin.isatty():
+        message = "Not a TTY, so delete cannot be confirmed interactively."
+        raise SystemExit(message)
+
+    answer = input(f"This moves '{name}' to trash. Type 'trash' to continue: ").strip()
+    if answer != "trash":
+        print("Aborted.", file=sys.stderr)
+        return 0
+
+    workspace.trash(file_id)
+    print(f"Trashed {name} (recoverable from Drive's trash)", file=sys.stderr)
+    return 0
+
+
+def _snoop_peek(workspace: Any, file_meta: dict[str, Any]) -> int:
+    """A fast, non-interactive look at a file — what the fzf preview pane runs."""
+    from googleapiclient.errors import HttpError
+
+    from gfunk.workspace import DOC_MIME, SHEET_MIME
+
+    file_id = file_meta["id"]
+    name = file_meta.get("name", file_id)
+    mime = file_meta.get("mimeType", "")
+
+    try:
+        if mime == DOC_MIME:
+            data = workspace.export(file_id, "text/plain")
+            print(data.decode(errors="replace")[:2000])
+        elif mime == SHEET_MIME:
+            tabs = workspace.sheet_tabs(file_id)
+            if not tabs:
+                print(f"{name} (empty spreadsheet)")
+                return 0
+            rows = workspace.sample(file_id, tabs[0], limit=10)
+            from tabulate import tabulate
+
+            print(tabulate(rows, headers="keys"))
+        else:
+            print(f"{name}\n{mime}")
+    except HttpError:
+        print("(preview unavailable)")
     return 0
 
 
@@ -1345,7 +1457,9 @@ def cmd_dj(args: argparse.Namespace) -> int:
             "List Projects        Your scripts in a table": "list",
             "My Projects          All your Apps Script projects (browser)": "home",
             "Recent Runs          What ran, what failed, and when": "runs",
-            "My Triggers          What's scheduled, what's firing (browser)": "triggers",
+            "My Triggers          What's scheduled, what's firing (browser)": (
+                "triggers"
+            ),
         }
         chosen = fzf_pick(list(pages), "Apps Script — pick a page", abort_ok=True)
         if chosen is None:
