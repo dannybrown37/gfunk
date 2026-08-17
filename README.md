@@ -95,7 +95,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
-| `dj` | `scripts` | Open Apps Script dashboard, triggers, or runs |
+| `dj` | `scripts` | List your Apps Script projects, recent runs, or open one (triggers still browser-based) |
 | `mothership` | `mcp` | Start the MCP server on stdio |
 
 ## Development
