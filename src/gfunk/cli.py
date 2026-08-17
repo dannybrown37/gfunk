@@ -71,9 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     snoop.add_argument("--limit", type=int, default=200)
 
-    # "pull" is the word a new user types blind; "sample" is the one we mean.
+    # "sheet" is the word a new user types blind; "sample" is the one we mean.
     sample = sub.add_parser(
-        "sample", aliases=["pull"], help="Pull rows from a spreadsheet range"
+        "sample",
+        aliases=["sheet"],
+        help="Print a spreadsheet or a range of cells, --json option",
     )
     sample.add_argument("spreadsheet_id", nargs="?")
     sample.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
@@ -838,7 +840,7 @@ COMMANDS = {
     "dig": cmd_dig,
     "open": cmd_dig,
     "sample": cmd_sample,
-    "pull": cmd_sample,
+    "sheet": cmd_sample,
     "bounce": cmd_bounce,
     "export": cmd_bounce,
     "regulate": cmd_regulate,
