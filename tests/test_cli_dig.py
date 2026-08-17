@@ -89,3 +89,18 @@ def test_dig_picks_file_via_fzf_when_no_id(
         assert cmd_dig(dig_args()) == 0
 
     opened.assert_called_once()
+
+
+def test_dig_exits_cleanly_when_user_cancels_fzf() -> None:
+    workspace = MagicMock()
+    workspace.recent.return_value = [DOC_FILE]
+
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=workspace),
+        patch("gfunk.cli.can_browse", return_value=True),
+        patch("gfunk.cli.fzf_pick", return_value=None),
+        patch("gfunk.cli.open_in_browser") as opened,
+    ):
+        assert cmd_dig(dig_args()) == 0
+
+    opened.assert_not_called()

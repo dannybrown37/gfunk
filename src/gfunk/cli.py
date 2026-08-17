@@ -521,7 +521,7 @@ def cmd_dig(args: argparse.Namespace) -> int:
     if not file_id:
         file_meta = pick_file(workspace)
         if not file_meta:
-            file_id = prompt_required("File id: ", "a file id")
+            return 0
 
     if file_meta:
         file_id = file_meta["id"]
@@ -631,7 +631,7 @@ def cmd_bounce(args: argparse.Namespace) -> int:
     if not file_id:
         file_meta = pick_file(workspace)
         if not file_meta:
-            file_id = prompt_required("File id: ", "a file id")
+            return 0
 
     if file_meta:
         file_id = file_meta["id"]
