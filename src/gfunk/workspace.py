@@ -19,6 +19,7 @@ DRIVE_FIELDS = (
 FOLDER_MIME = "application/vnd.google-apps.folder"
 SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 DOC_MIME = "application/vnd.google-apps.document"
+SCRIPT_MIME = "application/vnd.google-apps.script"
 
 EXPORT_MIME_MAP: dict[str, dict[str, str]] = {
     SHEET_MIME: {
@@ -61,10 +62,13 @@ def rows_to_dicts(rows: list[list[str]]) -> list[dict[str, str]]:
 class Workspace:
     """Read operations over Drive and Sheets, writing through to the cache."""
 
-    def __init__(self, drive: Any, sheets: Any, cache: Cache) -> None:
+    def __init__(
+        self, drive: Any, sheets: Any, cache: Cache, script: Any = None
+    ) -> None:
         self.drive = drive
         self.sheets = sheets
         self.cache = cache
+        self.script = script
 
     @classmethod
     def connect(cls, cache: Cache | None = None) -> Workspace:
@@ -72,6 +76,7 @@ class Workspace:
         return cls(
             drive=build("drive", "v3", credentials=creds),
             sheets=build("sheets", "v4", credentials=creds),
+            script=build("script", "v1", credentials=creds),
             cache=cache or Cache(),
         )
 
@@ -209,6 +214,26 @@ class Workspace:
             .execute()
         )
         return list(response.get("files", [])[:limit])
+
+    def scripts(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Apps Script projects — they're Drive files with a special MIME type."""
+        query = f"mimeType = '{SCRIPT_MIME}' and trashed = false"
+        response = (
+            self.drive.files()
+            .list(
+                q=query,
+                orderBy="modifiedTime desc",
+                fields=DRIVE_FIELDS,
+                pageSize=min(limit, 100),
+            )
+            .execute()
+        )
+        return list(response.get("files", [])[:limit])
+
+    def processes(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Recent Apps Script executions, across all your projects."""
+        response = self.script.processes().list(pageSize=min(limit, 50)).execute()
+        return list(response.get("processes", [])[:limit])
 
     def sheet_tabs(self, spreadsheet_id: str) -> list[str]:
         """Tab names in a spreadsheet, for range pickers."""

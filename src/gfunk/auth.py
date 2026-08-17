@@ -12,6 +12,7 @@ from gfunk.browser import register as register_browser
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/script.processes",
 ]
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "gfunk"

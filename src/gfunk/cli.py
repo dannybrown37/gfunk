@@ -219,7 +219,10 @@ def build_parser() -> argparse.ArgumentParser:
     dj.add_argument(
         "page",
         nargs="?",
-        help="'runs', 'triggers', or a script id to open directly",
+        help="'list', 'runs', 'triggers', or a script id to open directly",
+    )
+    dj.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of a table (list)"
     )
 
     mothership = sub.add_parser(
@@ -1148,10 +1151,6 @@ def pick_destination(workspace: Any, start: str = "root") -> tuple[str, str] | N
 
 
 DJ_PAGES: dict[str, tuple[str, str]] = {
-    "runs": (
-        "https://script.google.com/home/executions",
-        "Recent executions — see what ran, what failed, and when",
-    ),
     "triggers": (
         "https://script.google.com/home/triggers",
         "Your triggers — what's scheduled, what's firing",
@@ -1161,30 +1160,92 @@ DJ_HOME = "https://script.google.com/home"
 DJ_PROJECT = "https://script.google.com/d/{script_id}/edit"
 
 
+def _dj_list(*, as_json: bool) -> int:
+    from gfunk.workspace import Workspace
+
+    with status("Fetching scripts"):
+        ws = Workspace.connect()
+        projects = ws.scripts()
+
+    if as_json:
+        print(json.dumps(projects, indent=2))
+        return 0
+
+    if not projects:
+        print("(no scripts found)")
+        print(
+            "\nRun again with:\n  gfunk dj list",
+            file=sys.stderr,
+        )
+        return 0
+
+    rows = [
+        {
+            "Name": p["name"],
+            "Modified": p.get("modifiedTime", "")[:10],
+            "ID": p["id"],
+        }
+        for p in projects
+    ]
+    return emit_table(rows, "gfunk dj list")
+
+
+def _dj_runs(*, as_json: bool) -> int:
+    from gfunk.workspace import Workspace
+
+    with status("Fetching executions"):
+        ws = Workspace.connect()
+        processes = ws.processes()
+
+    if as_json:
+        print(json.dumps(processes, indent=2))
+        return 0
+
+    if not processes:
+        print("(no recent executions)")
+        print(
+            "\nRun again with:\n  gfunk dj runs",
+            file=sys.stderr,
+        )
+        return 0
+
+    rows = [
+        {
+            "Project": p.get("projectName", ""),
+            "Function": p.get("functionName", ""),
+            "Status": p.get("processStatus", ""),
+            "Started": p.get("startTime", "")[:19],
+        }
+        for p in processes
+    ]
+    return emit_table(rows, "gfunk dj runs")
+
+
 def cmd_dj(args: argparse.Namespace) -> int:
     from gfunk.browser import register as register_browser
 
     page = args.page
 
-    if page and page in DJ_PAGES:
-        url, description = DJ_PAGES[page]
-        register_browser()
-        webbrowser.open(url)
-        print(description)
-        print(f"\nRun again with:\n  gfunk dj {page}", file=sys.stderr)
-        return 0
+    if page in ("list", "runs"):
+        handler = _dj_list if page == "list" else _dj_runs
+        return handler(as_json=getattr(args, "json", False))
 
     if page:
-        url = DJ_PROJECT.format(script_id=page)
+        if page in DJ_PAGES:
+            url, description = DJ_PAGES[page]
+            print(description)
+        else:
+            url = DJ_PROJECT.format(script_id=page)
+            print(f"Opened script {page} in your browser.")
         register_browser()
         webbrowser.open(url)
-        print(f"Opened script {page} in your browser.")
         print(f"\nRun again with:\n  gfunk dj {quote(page)}", file=sys.stderr)
         return 0
 
     if can_browse():
         pages = {
-            "My Projects          All your Apps Script projects": "home",
+            "List Projects        Your scripts in a table": "list",
+            "My Projects          All your Apps Script projects (browser)": "home",
             "Recent Runs          What ran, what failed, and when": "runs",
             "My Triggers          What's scheduled, what's firing": "triggers",
         }
@@ -1192,6 +1253,9 @@ def cmd_dj(args: argparse.Namespace) -> int:
         if chosen is None:
             return 0
         picked = pages[chosen]
+        if picked in ("list", "runs"):
+            handler = _dj_list if picked == "list" else _dj_runs
+            return handler(as_json=False)
         if picked == "home":
             url = DJ_HOME
         else:
@@ -1208,7 +1272,7 @@ def cmd_dj(args: argparse.Namespace) -> int:
     webbrowser.open(DJ_HOME)
     print("Apps Script dashboard")
     print("\nPages:")
-    print("  gfunk dj              Your projects")
+    print("  gfunk dj list         Your projects (table)")
     print("  gfunk dj runs         Recent executions")
     print("  gfunk dj triggers     Your triggers")
     print("  gfunk dj <script_id>  Open a specific project")

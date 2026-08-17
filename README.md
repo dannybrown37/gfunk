@@ -142,6 +142,7 @@ gfunk/
 |   |-- test_cli.py
 |   |-- test_cli_bounce.py
 |   |-- test_cli_dj.py
+|   |-- test_cli_dj_list.py
 |   |-- test_cli_drop.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_peep.py
@@ -155,7 +156,8 @@ gfunk/
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py
 |   |-- test_regulate.py
-|   `-- test_workspace.py
+|   |-- test_workspace.py
+|   `-- test_workspace_scripts.py
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
