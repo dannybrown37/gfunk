@@ -147,6 +147,7 @@ gfunk/
 |   |-- test_cli_bounce.py
 |   |-- test_cli_dig.py
 |   |-- test_cli_mount_up.py
+|   |-- test_cli_peep.py
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py

@@ -104,6 +104,32 @@ def build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit the audit as JSON instead of a table"
     )
 
+    # "read" is the word a new user types blind; "peep" is the one we mean.
+    peep = sub.add_parser(
+        "peep",
+        aliases=["read"],
+        help="Read a Doc or Sheet in the terminal",
+    )
+    peep.add_argument("file_id", nargs="?", help="Drive file id")
+    peep.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50' (sheets)")
+    peep.add_argument(
+        "--format",
+        dest="fmt",
+        default=None,
+        choices=["txt", "md", "html"],
+        help="Doc output format (default: txt)",
+    )
+    peep.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of a table (sheets)"
+    )
+    peep.add_argument("--limit", type=int, default=None, help="Max rows (sheets)")
+    peep.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Write to file instead of stdout",
+    )
+
     bounce = sub.add_parser(
         "bounce",
         aliases=["export"],
@@ -498,16 +524,23 @@ def cmd_snoop(args: argparse.Namespace) -> int:
     return 0
 
 
-def pick_file(workspace: Any) -> dict[str, Any] | None:
+def pick_file(
+    workspace: Any,
+    *,
+    mime_types: set[str] | None = None,
+    header: str = "Pick a file",
+) -> dict[str, Any] | None:
     """fzf over recent Drive files; returns file metadata dict or None."""
     if not can_browse():
         return None
     with status("Loading recent files"):
         files = workspace.recent()
+    if mime_types:
+        files = [f for f in files if f.get("mimeType") in mime_types]
     if not files:
         return None
     labels = {f"{f['name']}\t{f['id']}": f for f in files}
-    chosen = fzf_pick(list(labels), "Pick a file", abort_ok=True)
+    chosen = fzf_pick(list(labels), header, abort_ok=True)
     return labels[chosen] if chosen else None
 
 
@@ -617,6 +650,111 @@ def _bounce_as_json(
     else:
         print(payload)
     return 0
+
+
+PEEP_MIME_MAP = {
+    "txt": "text/plain",
+    "md": "text/plain",
+    "html": "text/html",
+}
+
+
+def cmd_peep(args: argparse.Namespace) -> int:
+    from gfunk.workspace import DOC_MIME, SHEET_MIME, Workspace
+
+    peepable = {DOC_MIME, SHEET_MIME}
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    file_id = args.file_id
+    file_meta = None
+
+    if not file_id:
+        file_meta = pick_file(
+            workspace,
+            mime_types=peepable,
+            header="Pick a Doc or Sheet to read",
+        )
+        if not file_meta:
+            return 0
+
+    if file_meta:
+        file_id = file_meta["id"]
+    else:
+        with status("Reading file metadata"):
+            file_meta = workspace.file_meta(file_id)
+
+    mime = file_meta.get("mimeType", "")
+    name = file_meta.get("name", file_id)
+
+    if mime not in peepable:
+        print(
+            f"{name} is not a Doc or Sheet. Use 'bounce' for other file types.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if mime == SHEET_MIME:
+        return _peep_sheet(args, workspace, file_id, name)
+    return _peep_doc(args, workspace, file_id, name)
+
+
+def _peep_doc(args: argparse.Namespace, workspace: Any, file_id: str, name: str) -> int:
+    fmt = args.fmt or "txt"
+    export_mime = PEEP_MIME_MAP[fmt]
+
+    with status(f"Reading {name}"):
+        data = workspace.export(file_id, export_mime)
+
+    text = data.decode()
+    if args.output:
+        args.output.write_text(text)
+        print(f"Wrote {len(text)} chars to {args.output}", file=sys.stderr)
+    else:
+        print(text, end="")
+
+    replay = f"gfunk peep {quote(file_id)} --format {fmt}"
+    if args.output:
+        replay += f" -o {quote(str(args.output))}"
+    print(f"\nRun again with:\n  {replay}", file=sys.stderr)
+    return 0
+
+
+def _peep_sheet(
+    args: argparse.Namespace, workspace: Any, file_id: str, name: str
+) -> int:
+    cell_range = args.cell_range
+    if not cell_range:
+        cell_range = pick_range(workspace, file_id)
+    if not cell_range:
+        cell_range = prompt_required("Range (e.g. Sheet1 or A1:D50): ", "a range")
+
+    with status(f"Reading {name}"):
+        rows = workspace.sample(file_id, cell_range, limit=args.limit)
+
+    replay = f"gfunk peep {quote(file_id)} {quote(cell_range)}"
+    if args.json:
+        if args.output:
+            args.output.write_text(json.dumps(rows, indent=2))
+            print(f"Wrote {len(rows)} records to {args.output}", file=sys.stderr)
+            print(
+                f"\nRun again with:\n  {replay} --json -o {quote(str(args.output))}",
+                file=sys.stderr,
+            )
+            return 0
+        return emit(rows, replay + " --json")
+    if args.output:
+        from tabulate import tabulate
+
+        args.output.write_text(tabulate(rows, headers="keys", tablefmt="simple"))
+        print(f"Wrote {len(rows)} rows to {args.output}", file=sys.stderr)
+        print(
+            f"\nRun again with:\n  {replay} -o {quote(str(args.output))}",
+            file=sys.stderr,
+        )
+        return 0
+    return emit_table(rows, replay)
 
 
 def cmd_bounce(args: argparse.Namespace) -> int:
@@ -841,6 +979,8 @@ COMMANDS = {
     "open": cmd_dig,
     "sample": cmd_sample,
     "sheet": cmd_sample,
+    "peep": cmd_peep,
+    "read": cmd_peep,
     "bounce": cmd_bounce,
     "export": cmd_bounce,
     "regulate": cmd_regulate,
