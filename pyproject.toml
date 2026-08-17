@@ -2,7 +2,7 @@
 name = "gfunk"
 version = "0.1.0"
 description = "MCP server and CLI for programmatic Google Workspace access"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "google-api-python-client>=2.198.0",
     "google-auth-httplib2>=0.4.1",
@@ -38,7 +38,7 @@ update_changelog_on_bump = true
 
 [tool.mypy]
 files = ["src", "tests"]
-python_version = "3.14"
+python_version = "3.13"
 strict = true
 warn_unreachable = true
 # google-auth ships py.typed but leaves its own internals untyped; that is a
