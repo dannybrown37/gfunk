@@ -11,7 +11,7 @@ from typing import Any
 
 COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
     (
-        "auth",
+        "the juice (auth)",
         [
             (
                 "mount-up",
@@ -21,29 +21,29 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
         ],
     ),
     (
-        "browse & read",
+        "the stash (files)",
         [
             (
                 "snoop",
                 ["browse"],
                 "Walk folders, read files, view sheets — your Drive window",
             ),
-        ],
-    ),
-    (
-        "act on files",
-        [
             ("drop", ["upload"], "Upload local files to Drive"),
             (
                 "bounce",
                 ["export"],
                 "Export a Google Workspace file (Sheets→CSV/JSON, Docs→txt/html)",
             ),
+        ],
+    ),
+    (
+        "the game (management)",
+        [
             ("regulate", ["audit"], "Audit who can reach the Drive files you own"),
         ],
     ),
     (
-        "apps",
+        "the studio (apps)",
         [
             (
                 "dj",
