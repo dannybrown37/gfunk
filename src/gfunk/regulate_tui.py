@@ -76,6 +76,8 @@ class ActionScreen(ModalScreen[str | None]):
 
 class ConfirmDeleteScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("y", "dismiss_true", "y confirm", show=False),
+        Binding("n", "dismiss_false", "n cancel", show=False),
         Binding("escape", "dismiss_false", "esc cancel", show=False),
     ]
 
@@ -84,16 +86,11 @@ class ConfirmDeleteScreen(ModalScreen[bool]):
         self._name = name
 
     def compose(self) -> ComposeResult:
-        yield Static(f"Trash '{self._name}'? Type 'trash' and press enter to confirm.")
-        yield Input(placeholder="trash")
+        yield Static(f"Trash '{self._name}'? This cannot be undone from here. [y/n]")
         yield Footer()
 
-    def on_mount(self) -> None:
-        self.query_one(Input).focus()
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        event.stop()
-        self.dismiss(result=event.value.strip() == "trash")
+    def action_dismiss_true(self) -> None:
+        self.dismiss(result=True)
 
     def action_dismiss_false(self) -> None:
         self.dismiss(result=False)
@@ -101,6 +98,8 @@ class ConfirmDeleteScreen(ModalScreen[bool]):
 
 class ConfirmRevokeScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("y", "dismiss_true", "y confirm", show=False),
+        Binding("n", "dismiss_false", "n cancel", show=False),
         Binding("escape", "dismiss_false", "esc cancel", show=False),
     ]
 
@@ -111,17 +110,12 @@ class ConfirmRevokeScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         yield Static(
             f"Revoke all access to '{self._name}'? "
-            "Type 'revoke' and press enter to confirm."
+            "This cannot be undone from here. [y/N]"
         )
-        yield Input(placeholder="revoke")
         yield Footer()
 
-    def on_mount(self) -> None:
-        self.query_one(Input).focus()
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        event.stop()
-        self.dismiss(result=event.value.strip() == "revoke")
+    def action_dismiss_true(self) -> None:
+        self.dismiss(result=True)
 
     def action_dismiss_false(self) -> None:
         self.dismiss(result=False)

@@ -103,7 +103,7 @@ def test_capital_o_opens_the_highlighted_row_without_exiting() -> None:
     assert row_count == 2
 
 
-def test_capital_d_trashes_the_row_after_typing_trash() -> None:
+def test_capital_d_trashes_the_row_after_pressing_y() -> None:
     async def run() -> tuple[bool, int]:
         ws = MagicMock()
         app = RegulateApp([SHARED_FILE, OTHER_FILE], workspace=ws)
@@ -111,8 +111,7 @@ def test_capital_d_trashes_the_row_after_typing_trash() -> None:
             await pilot.pause()
             await pilot.press("D")
             await pilot.pause()
-            await pilot.press(*"trash")
-            await pilot.press("enter")
+            await pilot.press("y")
             await pilot.pause()
             rows = app.query_one(ListView).query(RowItem)
             return ws.trash.called, len(rows)
@@ -140,7 +139,7 @@ def test_capital_d_cancelled_leaves_the_row() -> None:
     assert row_count == 2
 
 
-def test_capital_r_revokes_the_row_after_typing_revoke() -> None:
+def test_capital_r_revokes_the_row_after_pressing_y() -> None:
     async def run() -> tuple[bool, int]:
         ws = MagicMock()
         app = RegulateApp([SHARED_FILE, OTHER_FILE], workspace=ws)
@@ -148,8 +147,7 @@ def test_capital_r_revokes_the_row_after_typing_revoke() -> None:
             await pilot.pause()
             await pilot.press("R")
             await pilot.pause()
-            await pilot.press(*"revoke")
-            await pilot.press("enter")
+            await pilot.press("y")
             await pilot.pause()
             rows = app.query_one(ListView).query(RowItem)
             return ws.revoke.called, len(rows)
@@ -168,8 +166,7 @@ def test_capital_r_revokes_every_permission_id_on_the_row() -> None:
             await pilot.pause()
             await pilot.press("R")
             await pilot.pause()
-            await pilot.press(*"revoke")
-            await pilot.press("enter")
+            await pilot.press("y")
             await pilot.pause()
             return list(ws.revoke.call_args_list)
 

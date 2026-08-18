@@ -63,7 +63,7 @@ def test_snoop_act_bulk_deletes_selected_items(monkeypatch: pytest.MonkeyPatch) 
 
     with (
         patch("gfunk.cli.fzf_pick", return_value="Delete"),
-        patch("builtins.input", return_value="trash"),
+        patch("gfunk.cli._read_single_key", return_value="y"),
     ):
         assert _snoop_act_bulk(workspace, [FILE_A, FILE_B], folder_id="src") == 0
 
@@ -97,7 +97,7 @@ def test_snoop_delete_bulk_aborts_on_anything_else(
     workspace = MagicMock()
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
 
-    with patch("builtins.input", return_value="no"):
+    with patch("gfunk.cli._read_single_key", return_value="n"):
         assert _snoop_delete_bulk(workspace, [FILE_A, FILE_B]) == 0
 
     workspace.trash.assert_not_called()

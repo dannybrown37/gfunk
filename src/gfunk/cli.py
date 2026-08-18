@@ -303,6 +303,31 @@ def prompt_required(text: str, flag: str) -> str:
         print(f"Nothing entered. Ctrl-C to quit, or pass {flag}.", file=sys.stderr)
 
 
+def _read_single_key() -> str:
+    """Read one keypress from stdin without waiting for Enter."""
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        return sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def confirm_yn(text: str) -> bool:
+    """Ask for a single-keypress y/n confirmation, but never off a TTY."""
+    if not sys.stdin.isatty():
+        message = "Not a TTY, so nothing can be confirmed interactively."
+        raise SystemExit(message)
+    print(f"{text} [y/n] ", end="", file=sys.stderr, flush=True)
+    key = _read_single_key()
+    print(key, file=sys.stderr)
+    return key.lower() == "y"
+
+
 def emit(payload: Any, replay: str) -> int:
     print(json.dumps(payload, indent=2))
     print(f"\nRun again with:\n  {replay}", file=sys.stderr)
@@ -831,15 +856,10 @@ def _snoop_move_bulk(
 
 
 def _snoop_delete_bulk(workspace: Any, items: list[dict[str, Any]]) -> int:
-    if not sys.stdin.isatty():
-        message = "Not a TTY, so delete cannot be confirmed interactively."
-        raise SystemExit(message)
-
     names = ", ".join(item.get("name", item["id"]) for item in items)
-    answer = input(
-        f"This moves {len(items)} items ({names}) to trash. Type 'trash' to continue: "
-    ).strip()
-    if answer != "trash":
+    if not confirm_yn(
+        f"Trash {len(items)} items ({names})? This can be undone from Drive's trash."
+    ):
         print("Aborted.", file=sys.stderr)
         return 0
 
@@ -899,12 +919,7 @@ def _snoop_delete(workspace: Any, file_meta: dict[str, Any]) -> int:
     file_id = file_meta["id"]
     name = file_meta.get("name", file_id)
 
-    if not sys.stdin.isatty():
-        message = "Not a TTY, so delete cannot be confirmed interactively."
-        raise SystemExit(message)
-
-    answer = input(f"This moves '{name}' to trash. Type 'trash' to continue: ").strip()
-    if answer != "trash":
+    if not confirm_yn(f"Trash '{name}'? This can be undone from Drive's trash."):
         print("Aborted.", file=sys.stderr)
         return 0
 
