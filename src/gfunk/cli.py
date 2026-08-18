@@ -1181,6 +1181,7 @@ def cmd_regulate(args: argparse.Namespace) -> int:
         label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
         pid = file_parents.get(row["id"])
         folder = folder_names.get(pid, "") if pid else ""
+        row["folder"] = folder
         row["path"] = f"{folder}/{row['name']}" if folder else row["name"]
         print(f"{label}  {row['path']}")
         for reach in row["reached_by"]:

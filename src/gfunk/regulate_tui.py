@@ -1,8 +1,8 @@
 """Interactive TUI picker for `regulate` results, powered by Textual.
 
-Each result renders as its own box, same text as the plain-terminal report
-(label, path, one line per reach) — just boxed up and selectable, not
-condensed onto a single row. The link is left out; "Open in browser" covers it.
+Rows are grouped by folder under a header, one compact line per file —
+label, name, and who can reach it. The link is left out; "Open in browser"
+covers it.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from textual.widgets import (
 from gfunk.regulate import EXPOSURE_LABELS
 
 ACTIONS = ["Open in browser", "Move", "Delete", "Change permissions"]
+NO_FOLDER = "(no folder)"
 
 
 def matches_filter(row: dict[str, Any], query: str) -> bool:
@@ -36,6 +37,21 @@ def matches_filter(row: dict[str, Any], query: str) -> bool:
     haystack = [str(row.get("path", row.get("name", "")))]
     haystack += [str(reach) for reach in row.get("reached_by", [])]
     return any(needle in h.lower() for h in haystack)
+
+
+def group_by_folder(
+    rows: list[dict[str, Any]],
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    """Bucket rows by folder, preserving first-seen folder order."""
+    order: list[str] = []
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        folder = str(row.get("folder") or "") or NO_FOLDER
+        if folder not in groups:
+            order.append(folder)
+            groups[folder] = []
+        groups[folder].append(row)
+    return [(folder, groups[folder]) for folder in order]
 
 
 class ActionScreen(ModalScreen[str | None]):
@@ -57,18 +73,35 @@ class ActionScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+class FolderHeader(ListItem):
+    def __init__(self, folder: str, count: int) -> None:
+        super().__init__(
+            Static(f"{folder} ({count})"), classes="folder-header", disabled=True
+        )
+
+
 class RowItem(ListItem):
     def __init__(self, row: dict[str, Any]) -> None:
         label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
-        path = row.get("path", row["name"])
-        lines = [f"{label}  {path}"]
-        lines += [f"            └─ {reach}" for reach in row["reached_by"]]
-        super().__init__(Static("\n".join(lines)))
+        name = row.get("name", "")
+        reach = ", ".join(row.get("reached_by", []))
+        text = f"{label}  {name}"
+        if reach:
+            text += f"  — {reach}"
+        super().__init__(Static(text, classes="row-text"))
         self.row = row
 
 
+def build_items(rows: list[dict[str, Any]]) -> list[ListItem]:
+    items: list[ListItem] = []
+    for folder, folder_rows in group_by_folder(rows):
+        items.append(FolderHeader(folder, len(folder_rows)))
+        items.extend(RowItem(row) for row in folder_rows)
+    return items
+
+
 class RegulateApp(App[tuple[dict[str, Any], str] | None]):
-    """Box-select a shared file, then pick an action for it — link stays hidden."""
+    """Group-select a shared file, then pick an action for it — link stays hidden."""
 
     ENABLE_COMMAND_PALETTE = False
     TITLE = "gfunk regulate"
@@ -77,9 +110,14 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
         height: 1fr;
     }
     ListItem {
-        border: round $panel;
         padding: 0 1;
-        margin-bottom: 1;
+    }
+    .folder-header {
+        background: $panel;
+        text-style: bold;
+    }
+    .row-text {
+        color: $text-muted;
     }
     Input {
         display: none;
@@ -107,7 +145,7 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
         yield Header()
         with Vertical():
             yield Input(placeholder="filter by folder or viewer…")
-            yield ListView(*(RowItem(row) for row in self._rows))
+            yield ListView(*build_items(self._rows))
         yield Footer()
 
     def on_mount(self) -> None:
@@ -117,6 +155,12 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
     def _visible_rows(self) -> list[dict[str, Any]]:
         return [row for row in self._rows if matches_filter(row, self._query)]
 
+    def _rebuild(self, rows: list[dict[str, Any]]) -> None:
+        list_view = self.query_one(ListView)
+        list_view.clear()
+        for item in build_items(rows):
+            list_view.append(item)
+
     def action_filter(self) -> None:
         input_widget = self.query_one(Input)
         input_widget.add_class("visible")
@@ -124,10 +168,7 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         self._query = event.value
-        list_view = self.query_one(ListView)
-        list_view.clear()
-        for row in self._visible_rows():
-            list_view.append(RowItem(row))
+        self._rebuild(self._visible_rows())
 
     def on_input_submitted(self, _event: Input.Submitted) -> None:
         self.query_one(ListView).focus()
@@ -140,11 +181,8 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
         input_widget.value = ""
         input_widget.remove_class("visible")
         self._query = ""
-        list_view = self.query_one(ListView)
-        list_view.clear()
-        for row in self._rows:
-            list_view.append(RowItem(row))
-        list_view.focus()
+        self._rebuild(self._rows)
+        self.query_one(ListView).focus()
 
     def action_cursor_down(self) -> None:
         self.query_one(ListView).action_cursor_down()
@@ -153,15 +191,23 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
         self.query_one(ListView).action_cursor_up()
 
     def action_scroll_top(self) -> None:
-        self.query_one(ListView).index = 0
+        list_view = self.query_one(ListView)
+        for index, item in enumerate(list_view.children):
+            if not item.disabled:
+                list_view.index = index
+                break
 
     def action_scroll_bottom(self) -> None:
         list_view = self.query_one(ListView)
-        list_view.index = len(list_view) - 1
+        for index in range(len(list_view) - 1, -1, -1):
+            if not list_view.children[index].disabled:
+                list_view.index = index
+                break
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         item = event.item
-        assert isinstance(item, RowItem)
+        if not isinstance(item, RowItem):
+            return
         row = item.row
 
         def on_action(action: str | None) -> None:
