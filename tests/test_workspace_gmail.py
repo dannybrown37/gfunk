@@ -252,3 +252,14 @@ def test_gmail_trash_message_moves_to_trash(cache: Cache) -> None:
     gmail.users.return_value.messages.return_value.trash.assert_called_once_with(
         userId="me", id="m1"
     )
+
+
+def test_gmail_delete_label_deletes_by_id(cache: Cache) -> None:
+    gmail = MagicMock()
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, gmail=gmail)
+
+    ws.gmail_delete_label("EMPTY")
+
+    gmail.users.return_value.labels.return_value.delete.assert_called_once_with(
+        userId="me", id="EMPTY"
+    )

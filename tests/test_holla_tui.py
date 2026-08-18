@@ -502,6 +502,77 @@ def test_d_removes_the_message_from_the_list_on_confirm() -> None:
     assert asyncio.run(run()) == ["m2"]
 
 
+EMPTY_LABEL = {
+    "id": "EMPTY",
+    "name": "Empty",
+    "type": "user",
+    "messages_total": 0,
+    "messages_unread": 0,
+}
+
+
+def test_d_on_empty_label_prompts_and_deletes_on_confirm() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        app = HollaApp([EMPTY_LABEL, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_delete_label.assert_called_once_with("EMPTY")
+
+
+def test_d_on_empty_label_then_n_cancels_and_does_not_delete() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        app = HollaApp([EMPTY_LABEL, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_delete_label.assert_not_called()
+
+
+def test_d_on_empty_label_removes_it_from_the_list_on_confirm() -> None:
+    async def run() -> list[str]:
+        ws = MagicMock()
+        app = HollaApp([EMPTY_LABEL, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            items = app.query_one(ListView).query(LabelItem)
+            return [item.label_row["id"] for item in items]
+
+    assert asyncio.run(run()) == ["CATEGORY_PROMOTIONS"]
+
+
+def test_d_on_non_empty_label_warns_and_does_not_prompt() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        app = HollaApp([PROMO, EMPTY_LABEL], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_delete_label.assert_not_called()
+
+
 def test_s_toggles_labels_by_message_count_descending() -> None:
     async def run() -> list[str]:
         app = HollaApp([INBOX, PROMO], workspace=MagicMock())
@@ -513,3 +584,17 @@ def test_s_toggles_labels_by_message_count_descending() -> None:
             return [item.label_row["id"] for item in items]
 
     assert asyncio.run(run()) == ["CATEGORY_PROMOTIONS", "INBOX"]
+
+
+def test_d_on_builtin_label_warns_and_does_not_prompt() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_delete_label.assert_not_called()

@@ -169,6 +169,28 @@ class ConfirmTrashScreen(ModalScreen[bool]):
         self.dismiss(result=False)
 
 
+class ConfirmDeleteLabelScreen(ModalScreen[bool]):
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("y", "dismiss_true", "y confirm", show=False),
+        Binding("n", "dismiss_false", "n cancel", show=False),
+        Binding("escape", "dismiss_false", "esc cancel", show=False),
+    ]
+
+    def __init__(self, name: str) -> None:
+        super().__init__()
+        self._name = name
+
+    def compose(self) -> ComposeResult:
+        yield Static(f"Delete empty label '{self._name}'? Not recoverable. [y/n]")
+        yield Footer()
+
+    def action_dismiss_true(self) -> None:
+        self.dismiss(result=True)
+
+    def action_dismiss_false(self) -> None:
+        self.dismiss(result=False)
+
+
 class HollaApp(App[None]):
     """Browse Gmail labels, drill into one, back messages up, filter by sender."""
 
@@ -209,7 +231,7 @@ class HollaApp(App[None]):
         Binding("/", "filter", "/ filter"),
         Binding("a", "archive_message", "archive"),
         Binding("shift+a", "archive_to", "archive to…", key_display="A"),
-        Binding("d", "delete_message", "delete"),
+        Binding("d", "delete_message", "delete (label if empty)"),
         Binding("o", "open_message", "open"),
         Binding("s", "toggle_sort", "s date/size"),
         Binding("escape", "escape", "esc back", show=False),
@@ -392,6 +414,12 @@ class HollaApp(App[None]):
             return None
         return item.message
 
+    def _highlighted_label(self) -> dict[str, Any] | None:
+        item = self.query_one(ListView).highlighted_child
+        if not isinstance(item, LabelItem):
+            return None
+        return item.label_row
+
     def _schedule_preview(self, message: dict[str, Any]) -> None:
         """Debounced, lazy preview load — cursor moves cancel any pending fetch.
 
@@ -427,6 +455,10 @@ class HollaApp(App[None]):
         self.query_one("#preview-text", Static).update("")
 
     def action_delete_message(self) -> None:
+        if self._current_label is None:
+            self.action_delete_label()
+            return
+
         message = self._highlighted_message()
         if message is None:
             return
@@ -443,6 +475,34 @@ class HollaApp(App[None]):
 
         subject = str(message.get("subject", "(no subject)"))
         self.push_screen(ConfirmTrashScreen(subject), handle_confirm)
+
+    def action_delete_label(self) -> None:
+        label = self._highlighted_label()
+        if label is None:
+            return
+        if label.get("type") != "user":
+            self.notify(
+                f"'{label['name']}' is a built-in Gmail label — can't be deleted.",
+                severity="warning",
+            )
+            return
+        if int(label.get("messages_total", 0)) > 0:
+            self.notify(
+                f"'{label['name']}' has {label['messages_total']} messages — "
+                "empty it before deleting.",
+                severity="warning",
+            )
+            return
+
+        def handle_confirm(confirmed: bool | None) -> None:  # noqa: FBT001
+            if not confirmed:
+                return
+            self._workspace.gmail_delete_label(label["id"])
+            self._labels = [item for item in self._labels if item["id"] != label["id"]]
+            self._show_labels()
+            self.notify("Label deleted.")
+
+        self.push_screen(ConfirmDeleteLabelScreen(label["name"]), handle_confirm)
 
     def action_archive_message(self) -> None:
         message = self._highlighted_message()

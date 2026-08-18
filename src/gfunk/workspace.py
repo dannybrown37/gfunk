@@ -636,3 +636,7 @@ class Workspace:
         return dict(
             self.gmail.users().messages().trash(userId="me", id=message_id).execute()
         )
+
+    def gmail_delete_label(self, label_id: str) -> None:
+        """Permanently delete a label. Not recoverable — caller must confirm."""
+        self.gmail.users().labels().delete(userId="me", id=label_id).execute()
