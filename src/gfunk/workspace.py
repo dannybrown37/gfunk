@@ -613,3 +613,26 @@ class Workspace:
             .create(body=metadata, media_body=media, fields="id, name, webViewLink")
             .execute()
         )
+
+    def gmail_preview(self, message_id: str) -> str:
+        """Plain-text body of one message, for on-demand reading in the TUI.
+
+        Fetches `format="raw"` (the same shape `gmail_archive_message` uses) so
+        there's one decode path for full message content; only called when the
+        user asks to preview a specific message, never as part of a listing.
+        """
+        raw = (
+            self.gmail.users()
+            .messages()
+            .get(userId="me", id=message_id, format="raw")
+            .execute()
+        )
+        content = gmail.decode_raw_message(str(raw["raw"]))
+        parsed = gmail.parse_email_backup(content)
+        return str(parsed["body"])
+
+    def gmail_trash_message(self, message_id: str) -> dict[str, Any]:
+        """Move a Gmail message to Trash — recoverable for 30 days, not a purge."""
+        return dict(
+            self.gmail.users().messages().trash(userId="me", id=message_id).execute()
+        )

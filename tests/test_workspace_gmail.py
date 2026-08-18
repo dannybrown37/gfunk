@@ -217,3 +217,38 @@ def test_gmail_archive_message_reuses_existing_year_folder(cache: Cache) -> None
     assert drive.files.return_value.create.call_count == 1
     upload_kwargs = drive.files.return_value.create.call_args.kwargs
     assert upload_kwargs["body"]["parents"] == ["existing-folder"]
+
+
+def test_gmail_preview_returns_plain_text_body(cache: Cache) -> None:
+    import base64
+
+    raw = base64.urlsafe_b64encode(_build_raw_message()).rstrip(b"=")
+    gmail = MagicMock()
+    get_execute = (
+        gmail.users.return_value.messages.return_value.get.return_value.execute
+    )
+    get_execute.return_value = {"raw": raw.decode()}
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, gmail=gmail)
+
+    preview = ws.gmail_preview("m1")
+
+    assert "invoice" in preview.lower()
+    gmail.users.return_value.messages.return_value.get.assert_called_once_with(
+        userId="me", id="m1", format="raw"
+    )
+
+
+def test_gmail_trash_message_moves_to_trash(cache: Cache) -> None:
+    gmail = MagicMock()
+    trash_execute = (
+        gmail.users.return_value.messages.return_value.trash.return_value.execute
+    )
+    trash_execute.return_value = {"id": "m1", "labelIds": ["TRASH"]}
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, gmail=gmail)
+
+    result = ws.gmail_trash_message("m1")
+
+    assert result["id"] == "m1"
+    gmail.users.return_value.messages.return_value.trash.assert_called_once_with(
+        userId="me", id="m1"
+    )

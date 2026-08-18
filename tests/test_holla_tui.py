@@ -115,6 +115,7 @@ def test_starts_on_label_overview_with_counts() -> None:
 def test_selecting_a_label_loads_its_messages() -> None:
     async def run() -> list[str]:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
         app = HollaApp([INBOX, PROMO], workspace=ws)
         async with app.run_test() as pilot:
@@ -130,6 +131,7 @@ def test_selecting_a_label_loads_its_messages() -> None:
 def test_messages_default_sorted_newest_first() -> None:
     async def run() -> list[str]:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_2, MSG_1]
         app = HollaApp([INBOX, PROMO], workspace=ws)
         async with app.run_test() as pilot:
@@ -145,6 +147,7 @@ def test_messages_default_sorted_newest_first() -> None:
 def test_escape_from_messages_returns_to_labels() -> None:
     async def run() -> list[str]:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
         app = HollaApp([INBOX, PROMO], workspace=ws)
         async with app.run_test() as pilot:
@@ -162,6 +165,7 @@ def test_escape_from_messages_returns_to_labels() -> None:
 def test_slash_filters_messages_by_sender() -> None:
     async def run() -> int:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
         app = HollaApp([INBOX, PROMO], workspace=ws)
         async with app.run_test() as pilot:
@@ -179,6 +183,7 @@ def test_slash_filters_messages_by_sender() -> None:
 def test_a_archives_the_highlighted_message() -> None:
     async def run() -> MagicMock:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
         ws.gmail_archive_message.return_value = {
             "id": "d1",
@@ -312,6 +317,7 @@ def test_shift_a_opens_folder_browser_and_archives_to_chosen_folder() -> None:
     async def run() -> MagicMock:
         ws = MagicMock()
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_preview.return_value = "body text"
         ws.children.return_value = [DOCS_FOLDER]
         ws.gmail_archive_message.return_value = {
             "id": "d1",
@@ -339,6 +345,7 @@ def test_shift_a_opens_folder_browser_and_archives_to_chosen_folder() -> None:
 def test_o_opens_the_highlighted_message_in_browser() -> None:
     async def run() -> str:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
         app = HollaApp([INBOX, PROMO], workspace=ws)
         with (
@@ -359,6 +366,7 @@ def test_o_opens_the_highlighted_message_in_browser() -> None:
 def test_s_sorts_messages_by_size_descending() -> None:
     async def run() -> list[str]:
         ws = MagicMock()
+        ws.gmail_preview.return_value = ""
         ws.gmail_messages.return_value = [MSG_1, MSG_2]
         app = HollaApp([INBOX, PROMO], workspace=ws)
         async with app.run_test() as pilot:
@@ -371,6 +379,127 @@ def test_s_sorts_messages_by_size_descending() -> None:
             return [item.message["id"] for item in items]
 
     assert asyncio.run(run()) == ["m2", "m1"]
+
+
+def test_preview_is_not_fetched_until_debounce_elapses() -> None:
+    async def run() -> tuple[int, int]:
+        ws = MagicMock()
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_preview.return_value = "body text"
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            calls_immediately = ws.gmail_preview.call_count
+            await pilot.pause(0.5)
+            calls_after_debounce = ws.gmail_preview.call_count
+            return calls_immediately, calls_after_debounce
+
+    immediately, after_debounce = asyncio.run(run())
+    assert immediately == 0
+    assert after_debounce == 1
+
+
+def test_preview_fetches_only_the_final_highlighted_message_after_rapid_moves() -> None:
+    async def run() -> list[object]:
+        ws = MagicMock()
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_preview.return_value = "body text"
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("j")
+            await pilot.pause()
+            await pilot.press("k")
+            await pilot.pause(0.5)
+            return list(ws.gmail_preview.call_args_list)
+
+    calls = asyncio.run(run())
+    assert calls == [call("m1")]
+
+
+def test_preview_is_cached_and_not_refetched_for_the_same_message() -> None:
+    async def run() -> int:
+        ws = MagicMock()
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_preview.return_value = "body text"
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause(0.5)
+            await pilot.press("j")
+            await pilot.pause(0.5)
+            await pilot.press("k")
+            await pilot.pause(0.5)
+            return int(ws.gmail_preview.call_count)
+
+    assert asyncio.run(run()) == 2
+
+
+def test_d_prompts_and_trashes_the_highlighted_message_on_confirm() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        ws.gmail_preview.return_value = ""
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_trash_message.return_value = {"id": "m1"}
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_trash_message.assert_called_once_with("m1")
+
+
+def test_d_then_n_cancels_and_does_not_trash() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_preview.return_value = "body text"
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_trash_message.assert_not_called()
+
+
+def test_d_removes_the_message_from_the_list_on_confirm() -> None:
+    async def run() -> list[str]:
+        ws = MagicMock()
+        ws.gmail_preview.return_value = ""
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_trash_message.return_value = {"id": "m1"}
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            items = app.query_one(ListView).query(MessageItem)
+            return [item.message["id"] for item in items]
+
+    assert asyncio.run(run()) == ["m2"]
 
 
 def test_s_toggles_labels_by_message_count_descending() -> None:
