@@ -44,6 +44,11 @@ SHARING_FIELDS = (
     "permissions(id, type, role, emailAddress, domain, allowFileDiscovery))"
 )
 
+DUBS_FIELDS = (
+    "nextPageToken, files(id, name, mimeType, size, md5Checksum, parents, "
+    "webViewLink, owners(emailAddress))"
+)
+
 
 def escape_drive_query(term: str) -> str:
     """Escape a term for Drive's `q` syntax, which is its own injection surface."""
@@ -190,6 +195,25 @@ class Workspace:
         self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
         return found
 
+    def dubs(self, limit: int = 1000) -> list[dict[str, Any]]:
+        """Files you own, with what duplicate-detection needs: hash, size, mime."""
+        request = self.drive.files().list(
+            q="'me' in owners and trashed = false",
+            orderBy="name",
+            fields=DUBS_FIELDS,
+            pageSize=min(limit, 100),
+        )
+
+        found: list[dict[str, Any]] = []
+        while request is not None and len(found) < limit:
+            response = request.execute()
+            found.extend(response.get("files", []))
+            request = self.drive.files().list_next(request, response)
+
+        found = found[:limit]
+        self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
+        return found
+
     def folder_names(self, folder_ids: set[str]) -> dict[str, str]:
         """Resolve folder IDs to names in a single HTTP round-trip.
 
@@ -224,6 +248,67 @@ class Workspace:
         for fid in remaining - names.keys():
             names[fid] = fid
         return names
+
+    def folder_paths(self, folder_ids: set[str]) -> dict[str, str]:
+        """Resolve folder IDs to full paths from My Drive root.
+
+        Drive has no path API, so this walks each folder's parent chain one
+        level at a time, batching every folder that still needs a name at
+        that depth into a single HTTP request — one round trip per level of
+        nesting shared across all folders, not one per folder.
+        """
+        if not folder_ids:
+            return {}
+
+        info: dict[str, tuple[str, str | None]] = {}
+        pending = {fid for fid in folder_ids if fid != "root"}
+        while pending:
+
+            def collect(
+                request_id: str,
+                response: dict[str, Any] | None,
+                _exception: Exception | None,
+            ) -> None:
+                if response is not None:
+                    parents = response.get("parents") or []
+                    info[request_id] = (
+                        response.get("name", request_id),
+                        parents[0] if parents else None,
+                    )
+                else:
+                    info[request_id] = (request_id, None)
+
+            batch = self.drive.new_batch_http_request()
+            for fid in pending:
+                batch.add(
+                    self.drive.files().get(fileId=fid, fields="name, parents"),
+                    callback=collect,
+                    request_id=fid,
+                )
+            batch.execute()
+
+            pending = {
+                parent
+                for fid in pending
+                for _, parent in (info[fid],)
+                if parent and parent != "root" and parent not in info
+            }
+
+        def path_for(fid: str) -> str:
+            parts: list[str] = []
+            current: str | None = fid
+            seen: set[str] = set()
+            while current and current != "root" and current not in seen:
+                seen.add(current)
+                name, parent = info.get(current, (current, None))
+                parts.append(name)
+                current = parent
+            parts.append("My Drive")
+            return "/".join(reversed(parts))
+
+        return {
+            fid: ("My Drive" if fid == "root" else path_for(fid)) for fid in folder_ids
+        }
 
     def sample(
         self, spreadsheet_id: str, cell_range: str, limit: int | None = None

@@ -43,6 +43,11 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
         [
             ("regulate", ["audit"], "Audit who can reach the Drive files you own"),
             (
+                "dubs",
+                ["duplicates"],
+                "Find duplicate files in Drive you own",
+            ),
+            (
                 "dj",
                 ["scripts"],
                 "Open your Apps Script dashboard, triggers, runs, or a project",
@@ -94,6 +99,18 @@ def _grouped_help(parser: argparse.ArgumentParser) -> str:
     lines.append(f"  {'--help':<{indent - 2}}show this help message and exit")
     lines.append(f"  {'--version':<{indent - 2}}show program's version number and exit")
     return "\n".join(lines) + "\n"
+
+
+def _add_dubs_parser(sub: Any) -> None:
+    dubs = sub.add_parser(
+        "dubs",
+        aliases=["duplicates"],
+        help="Find duplicate files in Drive you own",
+    )
+    dubs.add_argument("--limit", type=int, default=1000)
+    dubs.add_argument(
+        "--json", action="store_true", help="Emit the report as JSON instead of a table"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -217,6 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
     regulate.add_argument(
         "--json", action="store_true", help="Emit the audit as JSON instead of a table"
     )
+
+    _add_dubs_parser(sub)
 
     dj = sub.add_parser(
         "dj",
@@ -1325,6 +1344,115 @@ def regulate_pick(rows: list[dict[str, Any]], workspace: Any) -> None:
     print(f"{action} isn't wired up in regulate yet.", file=sys.stderr)
 
 
+def _dubs_rows(
+    files: list[dict[str, Any]], workspace: Any
+) -> tuple[list[list[dict[str, Any]]], list[list[dict[str, Any]]]]:
+    from gfunk.dubs import (
+        find_exact_duplicates,
+        find_possible_duplicates,
+        sort_by_waste,
+    )
+
+    file_parents: dict[str, str] = {}
+    parent_ids: set[str] = set()
+    for f in files:
+        parents = f.get("parents", [])
+        if parents:
+            parent_ids.add(parents[0])
+            file_parents[f["id"]] = parents[0]
+
+    if parent_ids:
+        with status("Resolving folder paths"):
+            folder_paths = workspace.folder_paths(parent_ids)
+    else:
+        folder_paths = {}
+
+    def with_path(f: dict[str, Any]) -> dict[str, Any]:
+        pid = file_parents.get(f["id"])
+        folder = folder_paths.get(pid, "") if pid else ""
+        path = f"{folder}/{f['name']}" if folder else f["name"]
+        return {**f, "folder": folder, "path": path}
+
+    exact = [
+        [with_path(f) for f in group]
+        for group in sort_by_waste(find_exact_duplicates(files))
+    ]
+    possible = [
+        [with_path(f) for f in group] for group in find_possible_duplicates(files)
+    ]
+    return exact, possible
+
+
+def _print_dubs_group(group: list[dict[str, Any]]) -> None:
+    for f in group:
+        print(f"    {f['path']}")
+        if f.get("webViewLink"):
+            print(f"      {f['webViewLink']}")
+
+
+def _print_dubs_report(
+    exact: list[list[dict[str, Any]]], possible: list[list[dict[str, Any]]]
+) -> None:
+    from gfunk.dubs import human_bytes, wasted_bytes
+
+    if exact:
+        print("Exact duplicates (identical content):\n")
+        for group in exact:
+            print(f"  {human_bytes(wasted_bytes(group))} reclaimable")
+            _print_dubs_group(group)
+        print()
+
+    if possible:
+        print("Possible duplicates (same name, can't verify content):\n")
+        for group in possible:
+            _print_dubs_group(group)
+        print()
+
+    total_waste = sum(wasted_bytes(g) for g in exact)
+    print(
+        f"{len(exact)} exact duplicate group(s), {human_bytes(total_waste)} "
+        f"reclaimable. {len(possible)} possible group(s) to check by hand."
+    )
+    print("\nRun again with:\n  gfunk dubs", file=sys.stderr)
+
+
+def cmd_dubs(args: argparse.Namespace) -> int:
+    from gfunk.workspace import Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+    with status(f"Reading up to {args.limit} files you own"):
+        files = workspace.dubs(limit=args.limit)
+
+    exact, possible = _dubs_rows(files, workspace)
+
+    if args.json:
+        payload = {"exact": exact, "possible": possible}
+        return emit(payload, f"gfunk dubs --limit {args.limit} --json")
+
+    if not exact and not possible:
+        print(f"No duplicates found. Checked {len(files)} files you own.")
+        return 0
+
+    _print_dubs_report(exact, possible)
+
+    if sys.stdin.isatty():
+        dubs_pick(exact, possible, workspace)
+
+    return 0
+
+
+def dubs_pick(
+    exact: list[list[dict[str, Any]]],
+    possible: list[list[dict[str, Any]]],
+    workspace: Any,
+) -> None:
+    from gfunk.dubs import flatten_groups
+    from gfunk.dubs_tui import DubsApp
+
+    DubsApp(flatten_groups(exact, possible), workspace).run()
+
+
 SELECT_HERE = ">> Move here <<"
 
 
@@ -1591,6 +1719,8 @@ COMMANDS = {
     "export": cmd_bounce,
     "regulate": cmd_regulate,
     "audit": cmd_regulate,
+    "dubs": cmd_dubs,
+    "duplicates": cmd_dubs,
     "dj": cmd_dj,
     "scripts": cmd_dj,
     "mothership": cmd_mothership,

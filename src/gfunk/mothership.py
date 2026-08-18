@@ -60,6 +60,17 @@ def build_server(
         files = ws.sharing(limit=limit)
         return audit(files, shared_only=shared_only)
 
+    @server.tool(name=f"{TOOL_PREFIX}dubs")
+    def dubs(limit: int = 1000) -> dict[str, Any]:
+        """Find duplicate files in Drive you own: hash matches and same-name natives."""
+        from gfunk.dubs import find_exact_duplicates, find_possible_duplicates
+
+        files = connect().dubs(limit=limit)
+        return {
+            "exact": find_exact_duplicates(files),
+            "possible": find_possible_duplicates(files),
+        }
+
     @server.tool(name=f"{TOOL_PREFIX}peep")
     def peep(file_id: str) -> dict[str, Any]:
         """Get metadata and webViewLink for a Drive file."""

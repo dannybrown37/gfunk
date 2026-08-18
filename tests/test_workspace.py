@@ -117,6 +117,35 @@ def test_sharing_pages_until_the_limit_is_met() -> None:
     assert [f["id"] for f in workspace.sharing(limit=10)] == ["a", "b", "c"]
 
 
+def test_dubs_asks_only_for_files_you_own_with_hash_and_size() -> None:
+    drive = MagicMock()
+    drive.files.return_value.list.return_value.execute.return_value = {"files": []}
+    drive.files.return_value.list_next.return_value = None
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    workspace.dubs(limit=10)
+
+    kwargs = drive.files.return_value.list.call_args.kwargs
+    assert "'me' in owners" in kwargs["q"]
+    assert "trashed = false" in kwargs["q"]
+    assert "md5Checksum" in kwargs["fields"]
+    assert "size" in kwargs["fields"]
+
+
+def test_dubs_pages_until_the_limit_is_met() -> None:
+    drive = MagicMock()
+    pages = [
+        {"files": [{"id": "a"}, {"id": "b"}]},
+        {"files": [{"id": "c"}]},
+    ]
+    request = drive.files.return_value.list.return_value
+    request.execute.side_effect = pages
+    drive.files.return_value.list_next.side_effect = [request, None]
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    assert [f["id"] for f in workspace.dubs(limit=10)] == ["a", "b", "c"]
+
+
 def test_children_lists_one_folders_contents_folders_first() -> None:
     drive = MagicMock()
     drive.files.return_value.list.return_value.execute.return_value = {
@@ -202,6 +231,55 @@ def test_folder_names_falls_back_to_the_id_when_unresolved() -> None:
     names = workspace.folder_names({"a", "missing"})
 
     assert names == {"a": "Reports", "missing": "missing"}
+
+
+def test_folder_paths_resolves_root_without_a_request() -> None:
+    drive = MagicMock()
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    paths = workspace.folder_paths({"root"})
+
+    assert paths == {"root": "My Drive"}
+    drive.new_batch_http_request.assert_not_called()
+
+
+def test_folder_paths_resolves_a_folder_directly_under_root() -> None:
+    drive = MagicMock()
+    batch = FakeBatch({"a": {"name": "Reports", "parents": ["root"]}})
+    drive.new_batch_http_request.return_value = batch
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    paths = workspace.folder_paths({"a"})
+
+    assert paths == {"a": "My Drive/Reports"}
+
+
+def test_folder_paths_walks_the_full_parent_chain() -> None:
+    # Drive has no path API, so nested folders need one round trip per level
+    # of depth: "a" is inside "b" which is inside root.
+    drive = MagicMock()
+    batches = [
+        FakeBatch({"a": {"name": "Reports", "parents": ["b"]}}),
+        FakeBatch({"b": {"name": "Archive", "parents": ["root"]}}),
+    ]
+    drive.new_batch_http_request.side_effect = batches
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    paths = workspace.folder_paths({"a"})
+
+    assert paths == {"a": "My Drive/Archive/Reports"}
+    assert drive.new_batch_http_request.call_count == 2
+
+
+def test_folder_paths_falls_back_to_the_id_when_unresolved() -> None:
+    drive = MagicMock()
+    batch = FakeBatch({"a": {"name": "Reports", "parents": ["root"]}})
+    drive.new_batch_http_request.return_value = batch
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    paths = workspace.folder_paths({"a", "missing"})
+
+    assert paths == {"a": "My Drive/Reports", "missing": "My Drive/missing"}
 
 
 def test_move_updates_parents() -> None:

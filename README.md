@@ -53,6 +53,7 @@ gfunk snoop <sheet-id> 'Sheet1!A1:D50'      # interactive spreadsheet viewer (TU
 gfunk snoop <file-id> --peek                # quick non-interactive preview (used by browse too)
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk regulate                              # audit who can see your files
+gfunk dubs                                  # find duplicate files you own
 gfunk dj                                    # open Apps Script dashboard
 gfunk mothership                            # start the MCP server on stdio
 ```
@@ -73,7 +74,7 @@ gfunk names the missing flag and exits rather than hanging a CI job.
 }
 ```
 
-Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__regulate`, `gfunk__peep`. **stdio only** — an HTTP
+Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__regulate`, `gfunk__dubs`, `gfunk__peep`. **stdio only** — an HTTP
 listener holding live Workspace credentials is attack surface this project doesn't need yet.
 
 ### The local cache
@@ -96,6 +97,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window. Tab multi-selects for bulk move/trash |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
+| `dubs` | `duplicates` | Find duplicate files you own — exact hash matches, plus same-name Docs/Sheets to check by hand. TUI picker lets you keep one copy and trash the rest |
 | `dj` | `scripts` | List your Apps Script projects, recent runs, pull/push source, or open one (triggers still browser-based) |
 | `mothership` | `mcp` | Start the MCP server on stdio |
 
@@ -128,6 +130,8 @@ gfunk/
 |       |-- browser.py
 |       |-- cache.py
 |       |-- cli.py
+|       |-- dubs.py
+|       |-- dubs_tui.py
 |       |-- errors.py
 |       |-- mcp_config.py
 |       |-- mothership.py
@@ -146,6 +150,7 @@ gfunk/
 |   |-- test_cli_dj.py
 |   |-- test_cli_dj_list.py
 |   |-- test_cli_drop.py
+|   |-- test_cli_dubs.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_peep.py
 |   |-- test_cli_peep_open.py
@@ -157,6 +162,8 @@ gfunk/
 |   |-- test_cli_snoop_move.py
 |   |-- test_cli_snoop_peek.py
 |   |-- test_cli_vibe.py
+|   |-- test_dubs.py
+|   |-- test_dubs_tui.py
 |   |-- test_errors.py
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py
