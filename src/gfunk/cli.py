@@ -208,7 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
         aliases=["audit"],
         help="Audit who can reach the Drive files you own",
     )
-    regulate.add_argument("--limit", type=int, default=200)
+    regulate.add_argument("--limit", type=int, default=1000)
     regulate.add_argument(
         "--all", action="store_true", help="Include files you have not shared"
     )
@@ -1135,15 +1135,6 @@ def _mothership_serve() -> int:
     return 0
 
 
-EXPOSURE_LABELS = {
-    "public": "PUBLIC  ",
-    "external": "EXTERNAL",
-    "internal": "INTERNAL",
-    "unknown": "UNKNOWN ",
-    "private": "private ",
-}
-
-
 def _resolve_folders(
     files: list[dict[str, Any]],
     workspace: Any,
@@ -1165,7 +1156,7 @@ def _resolve_folders(
 
 
 def cmd_regulate(args: argparse.Namespace) -> int:
-    from gfunk.regulate import audit, summarise
+    from gfunk.regulate import EXPOSURE_LABELS, audit, summarise
     from gfunk.workspace import Workspace
 
     with status("Signing in to Google"):
@@ -1190,8 +1181,8 @@ def cmd_regulate(args: argparse.Namespace) -> int:
         label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
         pid = file_parents.get(row["id"])
         folder = folder_names.get(pid, "") if pid else ""
-        path = f"{folder}/{row['name']}" if folder else row["name"]
-        print(f"{label}  {path}")
+        row["path"] = f"{folder}/{row['name']}" if folder else row["name"]
+        print(f"{label}  {row['path']}")
         for reach in row["reached_by"]:
             print(f"            └─ {reach}")
         if row["link"]:
@@ -1202,30 +1193,23 @@ def cmd_regulate(args: argparse.Namespace) -> int:
     print(f"\n{tally or 'nothing shared'} — out of {len(files)} files you own.")
     print("\nRun again with:\n  gfunk regulate", file=sys.stderr)
 
-    if can_browse() and rows:
+    if sys.stdin.isatty() and rows:
         regulate_pick(rows)
 
     return 0
 
 
-REGULATE_ACTIONS = ["Open in browser", "Move", "Delete", "Change permissions"]
 WRITE_ACTIONS = frozenset({"Move", "Delete", "Change permissions"})
 
 
 def regulate_pick(rows: list[dict[str, Any]]) -> None:
-    labels: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        label = EXPOSURE_LABELS.get(str(row["exposure"]), str(row["exposure"]))
-        labels[f"{label}  {row['name']}"] = row
+    from gfunk.regulate_tui import RegulateApp
 
-    chosen = fzf_pick(list(labels), "Pick a file to act on", abort_ok=True)
-    if chosen is None:
+    result = RegulateApp(rows).run()
+    if result is None:
         return
 
-    row = labels[chosen]
-    action = fzf_pick(REGULATE_ACTIONS, row["name"], abort_ok=True)
-    if action is None:
-        return
+    row, action = result
 
     if action == "Open in browser":
         open_in_browser(row)

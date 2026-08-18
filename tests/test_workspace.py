@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import MagicMock
 
 
@@ -142,6 +144,64 @@ def test_children_escapes_the_folder_id_it_is_handed() -> None:
 
     kwargs = drive.files.return_value.list.call_args.kwargs
     assert kwargs["q"] == "'it\\'s' in parents and trashed = false"
+
+
+Callback = Callable[[str, dict[str, Any] | None, Exception | None], None]
+
+
+class FakeBatch:
+    """Stands in for googleapiclient's BatchHttpRequest.
+
+    Collects `.add()` calls, then fires each stored callback on `.execute()`.
+    """
+
+    def __init__(self, responses: dict[str, dict[str, Any] | None]) -> None:
+        self._responses = responses
+        self.calls: list[tuple[Callback, str]] = []
+
+    def add(self, _request: object, callback: Callback, request_id: str) -> None:
+        self.calls.append((callback, request_id))
+
+    def execute(self) -> None:
+        for callback, request_id in self.calls:
+            callback(request_id, self._responses.get(request_id), None)
+
+
+def test_folder_names_resolves_root_without_a_request() -> None:
+    drive = MagicMock()
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    names = workspace.folder_names({"root"})
+
+    assert names == {"root": "My Drive"}
+    drive.new_batch_http_request.assert_not_called()
+    drive.files.return_value.get.assert_not_called()
+
+
+def test_folder_names_resolves_many_ids_in_one_http_request() -> None:
+    drive = MagicMock()
+    batch = FakeBatch({"a": {"name": "Reports"}, "b": {"name": "Archive"}})
+    drive.new_batch_http_request.return_value = batch
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    names = workspace.folder_names({"a", "b"})
+
+    assert names == {"a": "Reports", "b": "Archive"}
+    drive.new_batch_http_request.assert_called_once()
+    assert len(batch.calls) == 2
+
+
+def test_folder_names_falls_back_to_the_id_when_unresolved() -> None:
+    # A folder that no longer exists (deleted, or access revoked) can't be
+    # named, but the caller still needs an entry to key off.
+    drive = MagicMock()
+    batch = FakeBatch({"a": {"name": "Reports"}})
+    drive.new_batch_http_request.return_value = batch
+    workspace = Workspace(drive=drive, sheets=MagicMock(), cache=MagicMock())
+
+    names = workspace.folder_names({"a", "missing"})
+
+    assert names == {"a": "Reports", "missing": "missing"}
 
 
 def test_move_updates_parents() -> None:

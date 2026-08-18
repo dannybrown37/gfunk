@@ -41,34 +41,29 @@ def mock_workspace(files: list[dict[str, Any]]) -> MagicMock:
     return ws
 
 
-def test_picking_a_file_and_choosing_open_opens_it_in_a_browser() -> None:
+def test_picking_a_row_and_choosing_open_opens_it_in_a_browser() -> None:
     ws = mock_workspace([SHARED_FILE])
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=ws),
-        patch("gfunk.cli.can_browse", return_value=True),
-        patch(
-            "gfunk.cli.fzf_pick",
-            side_effect=[
-                "PUBLIC    Q3 Numbers",  # pick the file
-                "Open in browser",  # pick the action
-            ],
-        ),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.regulate_tui.RegulateApp.run") as run,
         patch("gfunk.cli.open_in_browser") as opened,
     ):
+        run.return_value = ({"id": "a", "name": "Q3 Numbers"}, "Open in browser")
         cmd_regulate(regulate_args())
 
     opened.assert_called_once()
     assert opened.call_args[0][0]["id"] == "a"
 
 
-def test_escaping_the_file_picker_skips_the_action_menu() -> None:
+def test_escaping_the_picker_skips_any_action() -> None:
     ws = mock_workspace([SHARED_FILE])
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=ws),
-        patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", return_value=None),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.regulate_tui.RegulateApp.run", return_value=None),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
         cmd_regulate(regulate_args())
@@ -76,14 +71,14 @@ def test_escaping_the_file_picker_skips_the_action_menu() -> None:
     opened.assert_not_called()
 
 
-def test_no_fzf_skips_the_picker_entirely(
+def test_no_tty_skips_the_picker_entirely(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     ws = mock_workspace([SHARED_FILE])
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=ws),
-        patch("gfunk.cli.can_browse", return_value=False),
+        patch("sys.stdin.isatty", return_value=False),
     ):
         assert cmd_regulate(regulate_args()) == 0
 
@@ -98,15 +93,10 @@ def test_write_actions_explain_they_need_write_scopes(
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=ws),
-        patch("gfunk.cli.can_browse", return_value=True),
-        patch(
-            "gfunk.cli.fzf_pick",
-            side_effect=[
-                "PUBLIC    Q3 Numbers",
-                "Move",
-            ],
-        ),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.regulate_tui.RegulateApp.run") as run,
     ):
+        run.return_value = ({"id": "a", "name": "Q3 Numbers"}, "Move")
         cmd_regulate(regulate_args())
 
     err = capsys.readouterr().err

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 from gfunk.auth import get_down
 from gfunk.cache import Cache
@@ -192,19 +191,38 @@ class Workspace:
         return found
 
     def folder_names(self, folder_ids: set[str]) -> dict[str, str]:
-        """Resolve folder IDs to names in a single batch."""
+        """Resolve folder IDs to names in a single HTTP round-trip.
+
+        Drive's query language has no `id =` filter, so a real batch — many
+        `get` calls bundled into one HTTP request — is the only way to avoid
+        one round-trip per folder.
+        """
         if not folder_ids:
             return {}
         names: dict[str, str] = {}
-        for fid in folder_ids:
-            if fid == "root":
-                names[fid] = "My Drive"
-                continue
-            try:
-                meta = self.drive.files().get(fileId=fid, fields="name").execute()
-                names[fid] = meta.get("name", fid)
-            except HttpError:
-                names[fid] = fid
+        remaining = {fid for fid in folder_ids if fid != "root"}
+        if "root" in folder_ids:
+            names["root"] = "My Drive"
+        if remaining:
+
+            def collect(
+                request_id: str,
+                response: dict[str, Any] | None,
+                _exception: Exception | None,
+            ) -> None:
+                if response is not None:
+                    names[request_id] = response.get("name", request_id)
+
+            batch = self.drive.new_batch_http_request()
+            for fid in remaining:
+                batch.add(
+                    self.drive.files().get(fileId=fid, fields="name"),
+                    callback=collect,
+                    request_id=fid,
+                )
+            batch.execute()
+        for fid in remaining - names.keys():
+            names[fid] = fid
         return names
 
     def sample(

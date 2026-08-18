@@ -132,6 +132,7 @@ gfunk/
 |       |-- mcp_config.py
 |       |-- mothership.py
 |       |-- regulate.py
+|       |-- regulate_tui.py
 |       |-- vibe.py
 |       `-- workspace.py
 |-- tests/
@@ -159,6 +160,7 @@ gfunk/
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py
 |   |-- test_regulate.py
+|   |-- test_regulate_tui.py
 |   |-- test_workspace.py
 |   |-- test_workspace_script_files.py
 |   `-- test_workspace_scripts.py

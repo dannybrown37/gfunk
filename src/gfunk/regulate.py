@@ -11,6 +11,14 @@ from typing import Any
 LEVELS = ("unknown", "private", "internal", "external", "public")
 OF_CONCERN = ("public", "external", "internal")
 
+EXPOSURE_LABELS = {
+    "public": "PUBLIC  ",
+    "external": "EXTERNAL",
+    "internal": "INTERNAL",
+    "unknown": "UNKNOWN ",
+    "private": "private ",
+}
+
 # No organisation sits behind these, so a shared domain is a coincidence rather
 # than a colleague. Everyone outside the account itself is a stranger.
 CONSUMER_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
