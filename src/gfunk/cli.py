@@ -417,6 +417,53 @@ def fzf_pick(
     raise KeyboardInterrupt  # esc in fzf means abort, not "ask me again"
 
 
+def fzf_pick_multi(
+    candidates: list[Any],
+    header: str,
+    *,
+    preview: str | None = None,
+) -> list[str]:
+    """Like `fzf_pick`, but tab toggles a row and enter confirms the set.
+
+    Returns the selected lines, in fzf's own order. An empty list means
+    nothing was on PATH, there was no TTY, or the picker was escaped —
+    all "nothing selected" to a caller.
+    """
+    import subprocess
+    from shutil import which
+
+    if not which("fzf") or not sys.stdin.isatty():
+        return []
+    args = [
+        "fzf",
+        "--multi",
+        "--header",
+        header,
+        "--height",
+        "40%",
+        "--reverse",
+    ]
+    if preview is not None:
+        args += [
+            "--delimiter",
+            "\t",
+            "--with-nth",
+            "2..",
+            "--preview",
+            preview,
+            "--preview-window",
+            "right:60%:wrap",
+        ]
+    result = subprocess.run(  # noqa: S603
+        args,
+        input="\n".join(str(item) for item in candidates),
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    return [line for line in result.stdout.splitlines() if line]
+
+
 def choose_download() -> Path | None:
     """Offer what was actually downloaded rather than asking for a path blind."""
     from gfunk.bootstrap import default_download_dirs, find_candidates
@@ -694,18 +741,26 @@ def _snoop_walk(
         candidates = [
             f"{item['id'] if item else ''}\t{label}" for label, item in entries.items()
         ]
-        chosen = fzf_pick(
+        chosen = fzf_pick_multi(
             candidates,
-            f"{path} — enter opens, esc goes up",
-            abort_ok=True,
+            f"{path} — enter opens, tab multi-selects, esc goes up",
             preview=preview,
         )
 
-        if chosen is None:
+        if not chosen:
             stack.pop()
             continue
-        _, _, label = chosen.partition("\t")
 
+        labels = [line.partition("\t")[2] for line in chosen]
+
+        if len(labels) > 1:
+            picked = [entries[label] for label in labels if label != UP]
+            items_only = [item for item in picked if item is not None]
+            if not items_only:
+                continue
+            return _snoop_act_bulk(workspace, items_only, folder_id=folder_id)
+
+        label = labels[0]
         if label == UP:
             stack.pop()
             continue
@@ -745,6 +800,56 @@ def _snoop_act(
     if action == "Move":
         return _snoop_move(workspace, item)
     return _snoop_delete(workspace, item)
+
+
+def _snoop_act_bulk(
+    workspace: Any, items: list[dict[str, Any]], *, folder_id: str
+) -> int:
+    action = fzf_pick(["Move", "Delete"], f"{len(items)} selected", abort_ok=True)
+    if action is None:
+        return 0
+    if action == "Move":
+        return _snoop_move_bulk(workspace, items, folder_id=folder_id)
+    return _snoop_delete_bulk(workspace, items)
+
+
+def _snoop_move_bulk(
+    workspace: Any, items: list[dict[str, Any]], *, folder_id: str
+) -> int:
+    names = ", ".join(item.get("name", item["id"]) for item in items)
+    print(f"Moving {len(items)} items ({names})", file=sys.stderr)
+
+    result = pick_destination(workspace)
+    if result is None:
+        return 0
+    destination, dest_name = result
+
+    for item in items:
+        workspace.move(item["id"], add_parent=destination, remove_parent=folder_id)
+    print(f"Moved {len(items)} items → {dest_name}", file=sys.stderr)
+    return 0
+
+
+def _snoop_delete_bulk(workspace: Any, items: list[dict[str, Any]]) -> int:
+    if not sys.stdin.isatty():
+        message = "Not a TTY, so delete cannot be confirmed interactively."
+        raise SystemExit(message)
+
+    names = ", ".join(item.get("name", item["id"]) for item in items)
+    answer = input(
+        f"This moves {len(items)} items ({names}) to trash. Type 'trash' to continue: "
+    ).strip()
+    if answer != "trash":
+        print("Aborted.", file=sys.stderr)
+        return 0
+
+    for item in items:
+        workspace.trash(item["id"])
+    print(
+        f"Trashed {len(items)} items (recoverable from Drive's trash)",
+        file=sys.stderr,
+    )
+    return 0
 
 
 def _snoop_print(workspace: Any, file_meta: dict[str, Any]) -> int:

@@ -93,7 +93,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | Command | Alias | What it does |
 |---|---|---|
 | `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
-| `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window |
+| `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window. Tab multi-selects for bulk move/trash |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dj` | `scripts` | List your Apps Script projects, recent runs, pull/push source, or open one (triggers still browser-based) |
@@ -152,6 +152,7 @@ gfunk/
 |   |-- test_cli_regulate.py
 |   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
+|   |-- test_cli_snoop_bulk.py
 |   |-- test_cli_snoop_delete.py
 |   |-- test_cli_snoop_move.py
 |   |-- test_cli_snoop_peek.py

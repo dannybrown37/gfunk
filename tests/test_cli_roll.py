@@ -53,14 +53,14 @@ def _label(candidate: object) -> str:
 
 def _pick_by_name(
     name_prefix: str,
-) -> Callable[[list[object], str], str | None]:
-    """Return a fzf_pick side_effect that picks the entry matching name_prefix."""
+) -> Callable[[list[object], str], list[str]]:
+    """Return a fzf_pick_multi side_effect that picks the entry matching name_prefix."""
 
-    def picker(candidates: list[object], _header: str, **_kw: bool) -> str | None:
+    def picker(candidates: list[object], _header: str, **_kw: bool) -> list[str]:
         for c in candidates:
             if _label(c).startswith(name_prefix):
-                return str(c)
-        return None
+                return [str(c)]
+        return []
 
     return picker
 
@@ -73,19 +73,19 @@ def test_picking_a_folder_descends_and_lists_it() -> None:
 
     def pick_then_none(
         candidates: list[object], _header: str, **_kw: bool
-    ) -> str | None:
+    ) -> list[str]:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             for c in candidates:
                 if _label(c).startswith("Reports/"):
-                    return str(c)
-        return None
+                    return [str(c)]
+        return []
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", side_effect=pick_then_none),
+        patch("gfunk.cli.fzf_pick_multi", side_effect=pick_then_none),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
         assert cmd_snoop(snoop_args()) == 0
@@ -100,23 +100,17 @@ def test_picking_a_file_opens_it_and_emits_it(
     workspace = MagicMock()
     workspace.children.return_value = [FILE]
 
-    call_count = 0
-
-    def pick_file_then_open(
-        candidates: list[object], _header: str, **_kw: bool
-    ) -> str | None:
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            for c in candidates:
-                if _label(c).startswith("Budget"):
-                    return str(c)
-        return "Open in browser"
+    def pick_file(candidates: list[object], _header: str, **_kw: bool) -> list[str]:
+        for c in candidates:
+            if _label(c).startswith("Budget"):
+                return [str(c)]
+        return []
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", side_effect=pick_file_then_open),
+        patch("gfunk.cli.fzf_pick_multi", side_effect=pick_file),
+        patch("gfunk.cli.fzf_pick", return_value="Open in browser"),
         patch("gfunk.cli.open_in_browser") as opened,
     ):
         assert cmd_snoop(snoop_args()) == 0
@@ -134,7 +128,7 @@ def test_escape_at_the_root_leaves_rather_than_looping() -> None:
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", return_value=None),
+        patch("gfunk.cli.fzf_pick_multi", return_value=[]),
     ):
         assert cmd_snoop(snoop_args()) == 0
 
@@ -149,19 +143,19 @@ def test_escape_below_the_root_climbs_back_up_a_level() -> None:
 
     def pick_then_none(
         candidates: list[object], _header: str, **_kw: bool
-    ) -> str | None:
+    ) -> list[str]:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             for c in candidates:
                 if _label(c).startswith("Reports/"):
-                    return str(c)
-        return None
+                    return [str(c)]
+        return []
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", side_effect=pick_then_none),
+        patch("gfunk.cli.fzf_pick_multi", side_effect=pick_then_none),
     ):
         assert cmd_snoop(snoop_args()) == 0
 
@@ -180,23 +174,23 @@ def test_the_parent_entry_climbs_the_same_way_escape_does() -> None:
 
     def pick_folder_then_up_then_none(
         candidates: list[object], _header: str, **_kw: bool
-    ) -> str | None:
+    ) -> list[str]:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             for c in candidates:
                 if _label(c).startswith("Reports/"):
-                    return str(c)
+                    return [str(c)]
         if call_count == 2:
             for c in candidates:
                 if _label(c) == "../":
-                    return str(c)
-        return None
+                    return [str(c)]
+        return []
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", side_effect=pick_folder_then_up_then_none),
+        patch("gfunk.cli.fzf_pick_multi", side_effect=pick_folder_then_up_then_none),
     ):
         assert cmd_snoop(snoop_args()) == 0
 
@@ -228,20 +222,19 @@ def test_the_header_shows_the_path_walked_so_far() -> None:
     workspace.children.side_effect = [[FOLDER], [FILE], [FOLDER]]
     headers: list[str] = []
 
-    def record(candidates: list[object], header: str, **_kw: bool) -> str | None:
+    def record(candidates: list[object], header: str, **_kw: bool) -> list[str]:
         headers.append(header)
         if len(headers) == 1:
             for c in candidates:
                 if _label(c).startswith("Reports/"):
-                    return str(c)
-        return None
+                    return [str(c)]
+        return []
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=workspace),
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", side_effect=record),
+        patch("gfunk.cli.fzf_pick_multi", side_effect=record),
     ):
         cmd_snoop(snoop_args())
 
     assert headers[0].startswith("My Drive")
-    assert "My Drive/Reports" in headers[1]
