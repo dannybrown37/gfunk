@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from googleapiclient.discovery import build
 
 from gfunk import gmail
 from gfunk.auth import get_down
 from gfunk.cache import Cache
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 DRIVE_FIELDS = (
     "nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, webViewLink, "

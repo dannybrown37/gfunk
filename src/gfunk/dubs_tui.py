@@ -7,7 +7,7 @@ at which point it is no longer a duplicate and disappears from the list.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
@@ -25,7 +25,9 @@ from textual.widgets import (
 
 from gfunk.browser import open_in_browser
 from gfunk.dubs import group_label, group_rows, human_bytes
-from gfunk.workspace import Workspace
+
+if TYPE_CHECKING:
+    from gfunk.workspace import Workspace
 
 ACTIONS = ["Open in browser", "Keep only this copy", "Delete this copy"]
 MIN_GROUP_SIZE = 2

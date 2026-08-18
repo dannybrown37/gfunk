@@ -18,7 +18,7 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             (
                 "mount-up",
                 ["setup", "login"],
-                "Create and install your own OAuth client, then sign in",
+                "Create/install your own OAuth client if needed + sign in",
             ),
         ],
     ),
@@ -118,16 +118,7 @@ def _add_dubs_parser(sub: Any) -> None:
     )
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="gfunk",
-        description="Nuthin' but a G-Suite thang",
-        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40),
-    )
-    parser.format_help = lambda: _grouped_help(parser)  # type: ignore[method-assign]
-    parser.add_argument("--version", action="version", version=version("gfunk"))
-    sub = parser.add_subparsers(dest="command", metavar="<command>")
-
+def _add_mount_up_parser(sub: Any) -> None:
     mount_up = sub.add_parser(
         "mount-up",
         aliases=["setup", "login"],
@@ -157,6 +148,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-sign-in", action="store_true", help="Install only; don't sign in"
     )
 
+
+def _add_snoop_parser(sub: Any) -> None:
     snoop = sub.add_parser(
         "snoop",
         aliases=["browse"],
@@ -197,6 +190,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Quick, non-interactive preview (first lines or rows)",
     )
 
+
+def _add_drop_parser(sub: Any) -> None:
     drop = sub.add_parser(
         "drop",
         aliases=["upload"],
@@ -205,6 +200,8 @@ def build_parser() -> argparse.ArgumentParser:
     drop.add_argument("files", nargs="+", type=Path, help="Local files to upload")
     drop.add_argument("--to", help="Destination folder id (default: root, or pick)")
 
+
+def _add_bounce_parser(sub: Any) -> None:
     bounce = sub.add_parser(
         "bounce",
         aliases=["export"],
@@ -227,6 +224,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sheet tab name (defaults to first tab)",
     )
 
+
+def _add_regulate_parser(sub: Any) -> None:
     regulate = sub.add_parser(
         "regulate",
         aliases=["audit"],
@@ -240,8 +239,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit the audit as JSON instead of a table"
     )
 
-    _add_dubs_parser(sub)
 
+def _add_holla_parser(sub: Any) -> None:
     holla = sub.add_parser(
         "holla",
         aliases=["email"],
@@ -258,6 +257,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit the messages as JSON instead of a table",
     )
 
+
+def _add_dj_parser(sub: Any) -> None:
     dj = sub.add_parser(
         "dj",
         aliases=["scripts"],
@@ -293,6 +294,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the overwrite confirmation for 'push'",
     )
 
+
+def _add_mothership_parser(sub: Any) -> None:
     mothership = sub.add_parser(
         "mothership",
         aliases=["mcp"],
@@ -323,6 +326,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     ms_sub.add_parser("serve", help="Start the MCP server on stdio")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="gfunk",
+        description="Nuthin' but a G-Suite thang",
+        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40),
+    )
+    parser.format_help = lambda: _grouped_help(parser)  # type: ignore[method-assign]
+    parser.add_argument("--version", action="version", version=version("gfunk"))
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
+
+    _add_mount_up_parser(sub)
+    _add_snoop_parser(sub)
+    _add_drop_parser(sub)
+    _add_bounce_parser(sub)
+    _add_regulate_parser(sub)
+    _add_dubs_parser(sub)
+    _add_holla_parser(sub)
+    _add_dj_parser(sub)
+    _add_mothership_parser(sub)
     return parser
 
 

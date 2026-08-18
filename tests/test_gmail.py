@@ -93,7 +93,7 @@ def test_filter_by_label_keeps_messages_carrying_that_label(
     ],
 )
 def test_filter_by_term_matches_subject_sender_or_snippet_case_insensitively(
-    subject: str, sender: str, snippet: str, term: str, matches: bool
+    subject: str, sender: str, snippet: str, term: str, *, matches: bool
 ) -> None:
     message = _message(subject=subject, sender=sender, snippet=snippet)
     result = filter_by_term([message], term)

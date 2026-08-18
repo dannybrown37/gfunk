@@ -7,8 +7,10 @@ is testable on its own, same shape as regulate.py.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Hashable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Hashable
 
 NATIVE_PREFIX = "application/vnd.google-apps."
 BYTES_PER_UNIT = 1024
