@@ -47,6 +47,11 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
                 ["duplicates"],
                 "Find duplicate files in Drive you own",
             ),
+            (
+                "holla",
+                ["email"],
+                "Filter Gmail messages by label and/or search term",
+            ),
         ],
     ),
     (
@@ -236,6 +241,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     _add_dubs_parser(sub)
+
+    holla = sub.add_parser(
+        "holla",
+        aliases=["email"],
+        help="Filter Gmail messages by label and/or search term",
+    )
+    holla.add_argument("--label", help="Gmail label id to filter by, e.g. IMPORTANT")
+    holla.add_argument(
+        "--term", help="Search term to match against subject/from/snippet"
+    )
+    holla.add_argument("--limit", type=int, default=50)
+    holla.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the messages as JSON instead of a table",
+    )
 
     dj = sub.add_parser(
         "dj",
@@ -1453,6 +1474,36 @@ def dubs_pick(
     DubsApp(flatten_groups(exact, possible), workspace).run()
 
 
+def cmd_holla(args: argparse.Namespace) -> int:
+    from gfunk.workspace import Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+    with status(f"Reading up to {args.limit} messages"):
+        messages = workspace.gmail_messages(
+            label=args.label, term=args.term, limit=args.limit
+        )
+
+    replay = "gfunk holla"
+    if args.label:
+        replay += f" --label {args.label}"
+    if args.term:
+        replay += f" --term {args.term}"
+
+    if args.json:
+        return emit(messages, f"{replay} --json")
+
+    if not messages:
+        print("No messages found.")
+        return 0
+
+    rows = [
+        {"from": m["from"], "subject": m["subject"], "snippet": m["snippet"]}
+        for m in messages
+    ]
+    return emit_table(rows, replay)
+
+
 SELECT_HERE = ">> Move here <<"
 
 
@@ -1721,6 +1772,8 @@ COMMANDS = {
     "audit": cmd_regulate,
     "dubs": cmd_dubs,
     "duplicates": cmd_dubs,
+    "holla": cmd_holla,
+    "email": cmd_holla,
     "dj": cmd_dj,
     "scripts": cmd_dj,
     "mothership": cmd_mothership,

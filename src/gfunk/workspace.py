@@ -7,6 +7,7 @@ from typing import Any
 
 from googleapiclient.discovery import build
 
+from gfunk import gmail
 from gfunk.auth import get_down
 from gfunk.cache import Cache
 
@@ -95,12 +96,18 @@ class Workspace:
     """Read operations over Drive and Sheets, writing through to the cache."""
 
     def __init__(
-        self, drive: Any, sheets: Any, cache: Cache, script: Any = None
+        self,
+        drive: Any,
+        sheets: Any,
+        cache: Cache,
+        script: Any = None,
+        gmail: Any = None,
     ) -> None:
         self.drive = drive
         self.sheets = sheets
         self.cache = cache
         self.script = script
+        self.gmail = gmail
 
     @classmethod
     def connect(cls, cache: Cache | None = None) -> Workspace:
@@ -109,6 +116,7 @@ class Workspace:
             drive=build("drive", "v3", credentials=creds),
             sheets=build("sheets", "v4", credentials=creds),
             script=build("script", "v1", credentials=creds),
+            gmail=build("gmail", "v1", credentials=creds),
             cache=cache or Cache(),
         )
 
@@ -444,3 +452,33 @@ class Workspace:
         return bytes(
             self.drive.files().export(fileId=file_id, mimeType=mime_type).execute()
         )
+
+    def gmail_messages(
+        self, label: str | None = None, term: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Recent messages, filtered by label and/or term, as summaries."""
+        request = (
+            self.gmail.users().messages().list(userId="me", maxResults=min(limit, 100))
+        )
+
+        ids: list[str] = []
+        while request is not None and len(ids) < limit:
+            response = request.execute()
+            ids.extend(m["id"] for m in response.get("messages", []))
+            request = self.gmail.users().messages().list_next(request, response)
+        ids = ids[:limit]
+
+        messages = [
+            self.gmail.users()
+            .messages()
+            .get(userId="me", id=mid, format="full")
+            .execute()
+            for mid in ids
+        ]
+
+        if label:
+            messages = gmail.filter_by_label(messages, label)
+        if term:
+            messages = gmail.filter_by_term(messages, term)
+
+        return [gmail.summarise(m) for m in messages]

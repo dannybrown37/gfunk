@@ -48,12 +48,13 @@ def test_first_run_completes_flow_and_caches_token(
     assert json.loads(token_path.read_text()) == {"token": "cached", "scopes": SCOPES}
 
 
-def test_scopes_include_sheets_drive_script_processes_and_projects() -> None:
+def test_scopes_include_sheets_drive_script_processes_projects_and_gmail() -> None:
     assert SCOPES == [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
         "https://www.googleapis.com/auth/script.processes",
         "https://www.googleapis.com/auth/script.projects",
+        "https://www.googleapis.com/auth/gmail.modify",
     ]
 
 

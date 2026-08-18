@@ -98,6 +98,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dubs` | `duplicates` | Find duplicate files you own — exact hash matches, plus same-name Docs/Sheets to check by hand. TUI picker lets you keep one copy and trash the rest |
+| `holla` | `email` | Filter Gmail messages by label and/or search term |
 | `dj` | `scripts` | List your Apps Script projects, recent runs, pull/push source, or open one (triggers still browser-based) |
 | `mothership` | `mcp` | Start the MCP server on stdio |
 
@@ -133,8 +134,10 @@ gfunk/
 |       |-- dubs.py
 |       |-- dubs_tui.py
 |       |-- errors.py
+|       |-- gmail.py
 |       |-- mcp_config.py
 |       |-- mothership.py
+|       |-- mothership_config.py
 |       |-- regulate.py
 |       |-- regulate_tui.py
 |       |-- vibe.py
@@ -151,6 +154,7 @@ gfunk/
 |   |-- test_cli_dj_list.py
 |   |-- test_cli_drop.py
 |   |-- test_cli_dubs.py
+|   |-- test_cli_holla.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_peep.py
 |   |-- test_cli_peep_open.py
@@ -165,11 +169,14 @@ gfunk/
 |   |-- test_dubs.py
 |   |-- test_dubs_tui.py
 |   |-- test_errors.py
+|   |-- test_gmail.py
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py
+|   |-- test_mothership_config.py
 |   |-- test_regulate.py
 |   |-- test_regulate_tui.py
 |   |-- test_workspace.py
+|   |-- test_workspace_gmail.py
 |   |-- test_workspace_script_files.py
 |   `-- test_workspace_scripts.py
 |-- .gitignore

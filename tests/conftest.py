@@ -24,6 +24,27 @@ def build_drive(pages: list[dict[str, Any]]) -> MagicMock:
     return drive
 
 
+def build_gmail(message_ids: list[str], messages_by_id: dict[str, Any]) -> MagicMock:
+    """A Gmail service whose messages().list() returns `message_ids`, one page.
+
+    `.get(id=...)` looks up the full message from `messages_by_id`.
+    """
+    gmail = MagicMock()
+    list_execute = (
+        gmail.users.return_value.messages.return_value.list.return_value.execute
+    )
+    list_execute.return_value = {"messages": [{"id": mid} for mid in message_ids]}
+    gmail.users.return_value.messages.return_value.list_next.return_value = None
+
+    def get(**kwargs: str) -> MagicMock:
+        result = MagicMock()
+        result.execute.return_value = messages_by_id[kwargs["id"]]
+        return result
+
+    gmail.users.return_value.messages.return_value.get.side_effect = get
+    return gmail
+
+
 def build_sheets(values: list[list[str]]) -> MagicMock:
     """A Sheets service whose values().get() returns `values`."""
     sheets = MagicMock()

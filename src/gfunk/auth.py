@@ -14,6 +14,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/script.processes",
     "https://www.googleapis.com/auth/script.projects",
+    "https://www.googleapis.com/auth/gmail.modify",
 ]
 
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "gfunk"
