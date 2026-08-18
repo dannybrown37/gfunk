@@ -25,8 +25,10 @@ from textual.widgets import (
 
 from gfunk.browser import open_in_browser
 from gfunk.dubs import group_label, group_rows, human_bytes
+from gfunk.workspace import Workspace
 
 ACTIONS = ["Open in browser", "Keep only this copy", "Delete this copy"]
+MIN_GROUP_SIZE = 2
 
 
 def matches_filter(row: dict[str, Any], query: str) -> bool:
@@ -94,7 +96,7 @@ class RowItem(ListItem):
 def build_items(rows: list[dict[str, Any]]) -> list[ListItem]:
     items: list[ListItem] = []
     for key, members in group_rows(rows):
-        if len(members) < 2:
+        if len(members) < MIN_GROUP_SIZE:
             continue
         items.append(GroupHeader(group_label(key, members)))
         items.extend(RowItem(row) for row in members)
@@ -140,7 +142,7 @@ class DubsApp(App[tuple[dict[str, Any], str] | None]):
         Binding("q", "quit", "q quit"),
     ]
 
-    def __init__(self, rows: list[dict[str, Any]], workspace: Any) -> None:
+    def __init__(self, rows: list[dict[str, Any]], workspace: Workspace | None) -> None:
         super().__init__()
         self._rows = rows
         self._workspace = workspace
@@ -158,7 +160,7 @@ class DubsApp(App[tuple[dict[str, Any], str] | None]):
         self.query_one(ListView).focus()
 
     def _visible_rows(self) -> list[dict[str, Any]]:
-        """A group is visible if any member matches — a match shouldn't orphan siblings."""
+        """A group is visible if any member matches, so siblings aren't orphaned."""
         if not self._query:
             return self._rows
         matching_keys = {
@@ -278,6 +280,7 @@ class DubsApp(App[tuple[dict[str, Any], str] | None]):
         def on_confirm(confirmed: bool | None) -> None:  # noqa: FBT001
             if not confirmed:
                 return
+            assert self._workspace is not None
             self._workspace.trash(row["id"])
             self._drop_rows({row["id"]})
             self.notify(f"Trashed {row.get('name', '')}")
@@ -294,6 +297,7 @@ class DubsApp(App[tuple[dict[str, Any], str] | None]):
         def on_confirm(confirmed: bool | None) -> None:  # noqa: FBT001
             if not confirmed:
                 return
+            assert self._workspace is not None
             for other in others:
                 self._workspace.trash(other["id"])
             self._drop_rows({o["id"] for o in others})

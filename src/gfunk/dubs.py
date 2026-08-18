@@ -76,7 +76,7 @@ GroupKey = tuple[str, int]
 def flatten_groups(
     exact: list[list[dict[str, Any]]], possible: list[list[dict[str, Any]]]
 ) -> list[dict[str, Any]]:
-    """One flat row list, each tagged with which group it came from — a picker's diet."""
+    """One flat row list, each tagged with which group it came from."""
     rows: list[dict[str, Any]] = []
     for kind, groups in (("exact", exact), ("possible", possible)):
         for index, group in enumerate(groups):
@@ -100,7 +100,7 @@ def group_rows(
 
 
 def group_label(key: GroupKey, members: list[dict[str, Any]]) -> str:
-    """Describe a group the way a person would, waste recomputed for whatever remains."""
+    """Describe a group the way a person would."""
     kind, _ = key
     if kind == "exact":
         waste = human_bytes(wasted_bytes(members))
