@@ -110,7 +110,7 @@ class ConfirmRevokeScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         yield Static(
             f"Revoke all access to '{self._name}'? "
-            "This cannot be undone from here. [y/N]"
+            "This cannot be undone from here. [y/n]"
         )
         yield Footer()
 
