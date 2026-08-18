@@ -116,7 +116,7 @@ def _add_dubs_parser(sub: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gfunk",
-        description="Programmatic Google Workspace access — CLI and MCP server.",
+        description="Ain't nothin' but a G-Suite thang",
         formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40),
     )
     parser.format_help = lambda: _grouped_help(parser)  # type: ignore[method-assign]

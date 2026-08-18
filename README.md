@@ -1,6 +1,6 @@
 # gfunk
 
-Programmatic Google Workspace access — a CLI and an MCP server. Google-only by design.
+Free your Drive, and your Workspace will follow — a CLI and an MCP server. Google-only by design.
 
 It exists to do what a general assistant's built-in Gmail/Calendar/Drive connectors can't:
 **Sheets and Docs, bulk analytical reads, cross-service joins, and writes.**
