@@ -41,34 +41,19 @@ def mock_workspace(files: list[dict[str, Any]]) -> MagicMock:
     return ws
 
 
-def test_picking_a_row_and_choosing_open_opens_it_in_a_browser() -> None:
-    ws = mock_workspace([SHARED_FILE])
-
-    with (
-        patch("gfunk.workspace.Workspace.connect", return_value=ws),
-        patch("sys.stdin.isatty", return_value=True),
-        patch("gfunk.regulate_tui.RegulateApp.run") as run,
-        patch("gfunk.cli.open_in_browser") as opened,
-    ):
-        run.return_value = ({"id": "a", "name": "Q3 Numbers"}, "Open in browser")
-        cmd_regulate(regulate_args())
-
-    opened.assert_called_once()
-    assert opened.call_args[0][0]["id"] == "a"
-
-
-def test_escaping_the_picker_skips_any_action() -> None:
+def test_escaping_the_picker_prints_nothing_extra(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     ws = mock_workspace([SHARED_FILE])
 
     with (
         patch("gfunk.workspace.Workspace.connect", return_value=ws),
         patch("sys.stdin.isatty", return_value=True),
         patch("gfunk.regulate_tui.RegulateApp.run", return_value=None),
-        patch("gfunk.cli.open_in_browser") as opened,
     ):
         cmd_regulate(regulate_args())
 
-    opened.assert_not_called()
+    assert "isn't wired up" not in capsys.readouterr().err
 
 
 def test_no_tty_skips_the_picker_entirely(
@@ -86,7 +71,7 @@ def test_no_tty_skips_the_picker_entirely(
     assert "Q3 Numbers" in out.out
 
 
-def test_write_actions_explain_they_need_write_scopes(
+def test_unimplemented_actions_say_so(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     ws = mock_workspace([SHARED_FILE])
@@ -100,4 +85,19 @@ def test_write_actions_explain_they_need_write_scopes(
         cmd_regulate(regulate_args())
 
     err = capsys.readouterr().err
-    assert "write" in err.lower() or "scope" in err.lower()
+    assert "Move" in err
+    assert "isn't wired up" in err
+
+
+def test_regulate_app_gets_the_workspace() -> None:
+    ws = mock_workspace([SHARED_FILE])
+
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=ws),
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.regulate_tui.RegulateApp") as app_cls,
+    ):
+        app_cls.return_value.run.return_value = None
+        cmd_regulate(regulate_args())
+
+    assert app_cls.call_args[0][1] is ws

@@ -68,10 +68,14 @@ ignore = [
 [lint.per-file-ignores]
 # The CLI is the one place printing to stdout is the product.
 "src/gfunk/cli.py" = ["T20", "ANN401"]
+# Browser-open fallback: only path when no browser is reachable, prints the link.
+"src/gfunk/browser.py" = ["T20"]
 # ANN401: JSON payloads and googleapiclient's `build()` results are genuinely
 # untyped; narrowing them would be a lie rather than a type.
 "src/gfunk/cache.py" = ["ANN401"]
 "src/gfunk/workspace.py" = ["ANN401"]
 "src/gfunk/mothership.py" = ["ANN401"]
+# Workspace is duck-typed here too, same as cli.py's snoop/regulate helpers.
+"src/gfunk/regulate_tui.py" = ["ANN401"]
 # PLR2004/EM101: a literal in an assertion is the assertion.
 "tests/*" = ["SLF001", "S105", "S106", "PLR2004", "EM101"]

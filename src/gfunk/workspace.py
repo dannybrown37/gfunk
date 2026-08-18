@@ -348,6 +348,12 @@ class Workspace:
             .execute()
         )
 
+    def revoke(self, file_id: str, permission_id: str) -> None:
+        """Remove one sharing permission from a file."""
+        self.drive.permissions().delete(
+            fileId=file_id, permissionId=permission_id
+        ).execute()
+
     def export(self, file_id: str, mime_type: str) -> bytes:
         """Export a Google Workspace file to the given MIME type."""
         return bytes(

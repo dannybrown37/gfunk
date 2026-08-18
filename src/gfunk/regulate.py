@@ -85,13 +85,15 @@ def assess(file: dict[str, Any]) -> dict[str, Any]:
     # Drive omits `permissions` on files whose sharing we may not read. Absence of
     # evidence is not evidence of safety, so it gets its own level, not "private".
     if permissions is None:
-        return {**row, "exposure": "unknown", "reached_by": []}
+        return {**row, "exposure": "unknown", "reached_by": [], "permission_ids": []}
 
     ranked = [(rank(p, domain_of(owner)), p) for p in permissions]
+    exposed = [p for level, p in ranked if level != "private"]
     return {
         **row,
         "exposure": worst_of([level for level, _ in ranked]),
-        "reached_by": [reach_of(p) for level, p in ranked if level != "private"],
+        "reached_by": [reach_of(p) for p in exposed],
+        "permission_ids": [str(p["id"]) for p in exposed if p.get("id")],
     }
 
 

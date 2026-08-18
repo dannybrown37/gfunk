@@ -8,6 +8,8 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
+from gfunk.browser import open_in_browser
+
 
 COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
     (
@@ -523,15 +525,6 @@ def pick(found: list[dict[str, Any]], header: str) -> dict[str, Any] | None:
     labels = {f"{item['name']}\t{item.get('id', '')}": item for item in found}
     chosen = fzf_pick(list(labels), header, abort_ok=True)
     return labels[chosen] if chosen is not None else None
-
-
-def open_in_browser(item: dict[str, Any]) -> None:
-    from gfunk.browser import register as register_browser
-
-    link = item.get("webViewLink") or f"https://drive.google.com/open?id={item['id']}"
-    register_browser()
-    if not webbrowser.open(link):
-        print(f"Could not open a browser. The link is:\n  {link}", file=sys.stderr)
 
 
 def browse(found: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -1195,33 +1188,21 @@ def cmd_regulate(args: argparse.Namespace) -> int:
     print("\nRun again with:\n  gfunk regulate", file=sys.stderr)
 
     if sys.stdin.isatty() and rows:
-        regulate_pick(rows)
+        regulate_pick(rows, workspace)
 
     return 0
 
 
-WRITE_ACTIONS = frozenset({"Move", "Delete", "Change permissions"})
-
-
-def regulate_pick(rows: list[dict[str, Any]]) -> None:
+def regulate_pick(rows: list[dict[str, Any]], workspace: Any) -> None:
+    """Open and Delete happen inside the TUI; other actions come back here unhandled."""
     from gfunk.regulate_tui import RegulateApp
 
-    result = RegulateApp(rows).run()
+    result = RegulateApp(rows, workspace).run()
     if result is None:
         return
 
-    row, action = result
-
-    if action == "Open in browser":
-        open_in_browser(row)
-        return
-
-    if action in WRITE_ACTIONS:
-        print(
-            f"{action} requires write scopes. Re-authenticate with:\n  gfunk mount-up",
-            file=sys.stderr,
-        )
-        return
+    _, action = result
+    print(f"{action} isn't wired up in regulate yet.", file=sys.stderr)
 
 
 SELECT_HERE = ">> Move here <<"

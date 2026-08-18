@@ -114,6 +114,35 @@ def test_a_file_with_no_permissions_field_is_reported_as_unknown_not_private() -
     result = assess({"id": "a", "name": "Someone else's", "owners": []})
 
     assert result["exposure"] == "unknown"
+    assert result["permission_ids"] == []
+
+
+def test_assess_carries_the_ids_of_exposing_permissions_for_revoke() -> None:
+    from gfunk.regulate import assess
+
+    file = {
+        "id": "a",
+        "name": "Q3 Numbers",
+        "owners": [{"emailAddress": OWNER}],
+        "permissions": [
+            {
+                "id": "owner-perm",
+                "type": "user",
+                "role": "owner",
+                "emailAddress": OWNER,
+            },
+            {
+                "id": "sam-perm",
+                "type": "user",
+                "role": "writer",
+                "emailAddress": "sam@other.com",
+            },
+        ],
+    }
+
+    result = assess(file)
+
+    assert result["permission_ids"] == ["sam-perm"]
 
 
 def test_audit_sorts_worst_first_then_by_name() -> None:

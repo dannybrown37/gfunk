@@ -23,9 +23,10 @@ from textual.widgets import (
     Static,
 )
 
+from gfunk.browser import open_in_browser
 from gfunk.regulate import EXPOSURE_LABELS
 
-ACTIONS = ["Open in browser", "Move", "Delete", "Change permissions"]
+ACTIONS = ["Open in browser", "Move", "Delete", "Revoke access", "Change permissions"]
 NO_FOLDER = "(no folder)"
 
 
@@ -71,6 +72,59 @@ class ActionScreen(ModalScreen[str | None]):
 
     def action_dismiss_none(self) -> None:
         self.dismiss(None)
+
+
+class ConfirmDeleteScreen(ModalScreen[bool]):
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "dismiss_false", "esc cancel", show=False),
+    ]
+
+    def __init__(self, name: str) -> None:
+        super().__init__()
+        self._name = name
+
+    def compose(self) -> ComposeResult:
+        yield Static(f"Trash '{self._name}'? Type 'trash' and press enter to confirm.")
+        yield Input(placeholder="trash")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        self.dismiss(result=event.value.strip() == "trash")
+
+    def action_dismiss_false(self) -> None:
+        self.dismiss(result=False)
+
+
+class ConfirmRevokeScreen(ModalScreen[bool]):
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "dismiss_false", "esc cancel", show=False),
+    ]
+
+    def __init__(self, name: str) -> None:
+        super().__init__()
+        self._name = name
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            f"Revoke all access to '{self._name}'? "
+            "Type 'revoke' and press enter to confirm."
+        )
+        yield Input(placeholder="revoke")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        self.dismiss(result=event.value.strip() == "revoke")
+
+    def action_dismiss_false(self) -> None:
+        self.dismiss(result=False)
 
 
 class FolderHeader(ListItem):
@@ -132,19 +186,23 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
         Binding("g", "scroll_top", "gg top"),
         Binding("G", "scroll_bottom", "G bottom", key_display="G"),
         Binding("/", "filter", "/ filter"),
+        Binding("O", "open_selected", "O open", key_display="O"),
+        Binding("D", "delete_selected", "D delete", key_display="D"),
+        Binding("R", "revoke_selected", "R revoke", key_display="R"),
         Binding("escape", "escape", "esc quit", show=False),
         Binding("q", "quit", "q quit"),
     ]
 
-    def __init__(self, rows: list[dict[str, Any]]) -> None:
+    def __init__(self, rows: list[dict[str, Any]], workspace: Any) -> None:
         super().__init__()
         self._rows = rows
+        self._workspace = workspace
         self._query = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Vertical():
-            yield Input(placeholder="filter by folder or viewer…")
+            yield Input(placeholder="filter by folder or viewer…", id="filter-input")
             yield ListView(*build_items(self._rows))
         yield Footer()
 
@@ -162,19 +220,23 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
             list_view.append(item)
 
     def action_filter(self) -> None:
-        input_widget = self.query_one(Input)
+        input_widget = self.query_one("#filter-input", Input)
         input_widget.add_class("visible")
         input_widget.focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "filter-input":
+            return
         self._query = event.value
         self._rebuild(self._visible_rows())
 
-    def on_input_submitted(self, _event: Input.Submitted) -> None:
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "filter-input":
+            return
         self.query_one(ListView).focus()
 
     def action_escape(self) -> None:
-        input_widget = self.query_one(Input)
+        input_widget = self.query_one("#filter-input", Input)
         if not input_widget.has_class("visible"):
             self.exit()
             return
@@ -212,6 +274,64 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
 
         def on_action(action: str | None) -> None:
             if action is not None:
-                self.exit((row, action))
+                self._handle_action(row, action)
 
         self.push_screen(ActionScreen(), on_action)
+
+    def _highlighted_row(self) -> dict[str, Any] | None:
+        item = self.query_one(ListView).highlighted_child
+        if not isinstance(item, RowItem):
+            return None
+        return item.row
+
+    def action_open_selected(self) -> None:
+        row = self._highlighted_row()
+        if row is not None:
+            self._handle_action(row, "Open in browser")
+
+    def action_delete_selected(self) -> None:
+        row = self._highlighted_row()
+        if row is not None:
+            self._handle_action(row, "Delete")
+
+    def action_revoke_selected(self) -> None:
+        row = self._highlighted_row()
+        if row is not None:
+            self._handle_action(row, "Revoke access")
+
+    def _handle_action(self, row: dict[str, Any], action: str) -> None:
+        """Open, Delete, and Revoke are handled in place, so the TUI stays up."""
+        if action == "Open in browser":
+            open_in_browser(row)
+            self.notify(f"Opened {row.get('name', '')} in browser")
+            return
+        if action == "Delete":
+            self._confirm_delete(row)
+            return
+        if action == "Revoke access":
+            self._confirm_revoke(row)
+            return
+        self.exit((row, action))
+
+    def _confirm_delete(self, row: dict[str, Any]) -> None:
+        def on_confirm(confirmed: bool | None) -> None:  # noqa: FBT001
+            if not confirmed:
+                return
+            self._workspace.trash(row["id"])
+            self._rows = [r for r in self._rows if r.get("id") != row.get("id")]
+            self._rebuild(self._visible_rows())
+            self.notify(f"Trashed {row.get('name', '')}")
+
+        self.push_screen(ConfirmDeleteScreen(str(row.get("name", ""))), on_confirm)
+
+    def _confirm_revoke(self, row: dict[str, Any]) -> None:
+        def on_confirm(confirmed: bool | None) -> None:  # noqa: FBT001
+            if not confirmed:
+                return
+            for permission_id in row.get("permission_ids", []):
+                self._workspace.revoke(row["id"], permission_id)
+            self._rows = [r for r in self._rows if r.get("id") != row.get("id")]
+            self._rebuild(self._visible_rows())
+            self.notify(f"Revoked access to {row.get('name', '')}")
+
+        self.push_screen(ConfirmRevokeScreen(str(row.get("name", ""))), on_confirm)

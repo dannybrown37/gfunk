@@ -4,6 +4,7 @@ import subprocess
 import sys
 import webbrowser
 from pathlib import Path
+from typing import Any
 
 PROC_VERSION = Path("/proc/version")
 RUNDLL32 = "/mnt/c/Windows/System32/rundll32.exe"
@@ -59,3 +60,10 @@ def hyperlink(text: str, url: str, *, supported: bool | None = None) -> str:
     if not supported:
         return url
     return f"\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\"
+
+
+def open_in_browser(item: dict[str, Any]) -> None:
+    link = item.get("webViewLink") or f"https://drive.google.com/open?id={item['id']}"
+    register()
+    if not webbrowser.open(link):
+        print(f"Could not open a browser. The link is:\n  {link}", file=sys.stderr)
