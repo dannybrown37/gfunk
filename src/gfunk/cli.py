@@ -28,7 +28,7 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             (
                 "snoop",
                 ["browse"],
-                "Walk folders, read files, view sheets — your Drive window",
+                "Walk your Google Drive folders, act on docs and sheets",
             ),
             ("drop", ["upload"], "Upload local files to Drive"),
             (
@@ -41,11 +41,15 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
     (
         "the game (management)",
         [
-            ("regulate", ["audit"], "Audit who can reach the Drive files you own"),
+            (
+                "regulate",
+                ["audit"],
+                "Audit and revoke who can reach the Drive files you own",
+            ),
             (
                 "dubs",
                 ["duplicates"],
-                "Find duplicate files in Drive you own",
+                "Find duplicate files in Drive you own, delete or open them",
             ),
             (
                 "holla",
@@ -60,12 +64,12 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             (
                 "dj",
                 ["scripts"],
-                "Open your Apps Script dashboard, triggers, runs, or a project",
+                "Open your Apps Script dashboard/info; push/pull scripts",
             ),
             (
                 "mothership",
                 ["mcp"],
-                "MCP server — install into clients or serve over stdio",
+                "MCP server: install into clients or serve over stdio",
             ),
         ],
     ),
