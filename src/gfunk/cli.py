@@ -47,16 +47,16 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
                 ["duplicates"],
                 "Find duplicate files in Drive you own",
             ),
-            (
-                "dj",
-                ["scripts"],
-                "Open your Apps Script dashboard, triggers, runs, or a project",
-            ),
         ],
     ),
     (
         "the studio (apps)",
         [
+            (
+                "dj",
+                ["scripts"],
+                "Open your Apps Script dashboard, triggers, runs, or a project",
+            ),
             (
                 "mothership",
                 ["mcp"],
@@ -116,7 +116,7 @@ def _add_dubs_parser(sub: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gfunk",
-        description="Ain't nothin' but a G-Suite thang",
+        description="Nuthin' but a G-Suite thang",
         formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40),
     )
     parser.format_help = lambda: _grouped_help(parser)  # type: ignore[method-assign]

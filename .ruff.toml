@@ -59,9 +59,6 @@ ignore = [
   "S101",
   # Python 3.14 evaluates annotations lazily (PEP 649), so hiding imports in a
   # TYPE_CHECKING block buys nothing and costs readability.
-  "TC001",
-  "TC002",
-  "TC003",
   "TRY003",
 ]
 
