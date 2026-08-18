@@ -10,6 +10,7 @@ dependencies = [
     "mcp>=2.0.0",
     "tabulate>=0.10.0",
     "textual>=3.0.0",
+    "xhtml2pdf>=0.2.17",
 ]
 
 [project.scripts]
@@ -47,5 +48,5 @@ warn_unreachable = true
 untyped_calls_exclude = ["google.oauth2", "google.auth"]
 
 [[tool.mypy.overrides]]
-module = ["googleapiclient.*", "google_auth_oauthlib.*"]
+module = ["googleapiclient.*", "google_auth_oauthlib.*", "xhtml2pdf.*"]
 ignore_missing_imports = true

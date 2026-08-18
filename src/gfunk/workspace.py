@@ -19,6 +19,7 @@ DRIVE_FIELDS = (
 )
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
+ARCHIVE_ROOT_NAME = "gfunk-archive"
 SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 DOC_MIME = "application/vnd.google-apps.document"
 SCRIPT_MIME = "application/vnd.google-apps.script"
@@ -455,13 +456,69 @@ class Workspace:
             self.drive.files().export(fileId=file_id, mimeType=mime_type).execute()
         )
 
+    def _gmail_batch_get(
+        self, requests: list[tuple[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        """Run a set of (request_id, request) Gmail calls in one HTTP batch.
+
+        One round trip for all N requests instead of N — this is what makes
+        `gmail_labels`/`gmail_messages` fast instead of N+1.
+        """
+        results: dict[str, dict[str, Any]] = {}
+
+        def collect(
+            request_id: str, response: dict[str, Any], exception: Exception | None
+        ) -> None:
+            if exception is None:
+                results[request_id] = response
+
+        if not requests:
+            return results
+
+        batch = self.gmail.new_batch_http_request()
+        for request_id, request in requests:
+            batch.add(request, callback=collect, request_id=request_id)
+        batch.execute()
+        return results
+
+    def gmail_labels(self) -> list[dict[str, Any]]:
+        """All labels with their message counts — one batched round trip."""
+        response = self.gmail.users().labels().list(userId="me").execute()
+        label_ids = [entry["id"] for entry in response.get("labels", [])]
+
+        details = self._gmail_batch_get(
+            [
+                (label_id, self.gmail.users().labels().get(userId="me", id=label_id))
+                for label_id in label_ids
+            ]
+        )
+
+        return [
+            {
+                "id": label_id,
+                "name": details[label_id].get("name", label_id),
+                "type": details[label_id].get("type", "user"),
+                "messages_total": details[label_id].get("messagesTotal", 0),
+                "messages_unread": details[label_id].get("messagesUnread", 0),
+            }
+            for label_id in label_ids
+            if label_id in details
+        ]
+
     def gmail_messages(
         self, label: str | None = None, term: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
-        """Recent messages, filtered by label and/or term, as summaries."""
-        request = (
-            self.gmail.users().messages().list(userId="me", maxResults=min(limit, 100))
-        )
+        """Recent message metadata (sender/subject/snippet/labels), filtered.
+
+        Fetches headers only (`format="metadata"`), never the message body — this is
+        an inventory tool, not a reader. `label` narrows the listing itself (fewer ids
+        fetched); `term` still has to filter client-side, applied after. The N
+        per-message `.get()` calls run as one batched round trip, not N.
+        """
+        list_kwargs: dict[str, Any] = {"userId": "me", "maxResults": min(limit, 100)}
+        if label:
+            list_kwargs["labelIds"] = [label]
+        request = self.gmail.users().messages().list(**list_kwargs)
 
         ids: list[str] = []
         while request is not None and len(ids) < limit:
@@ -470,13 +527,23 @@ class Workspace:
             request = self.gmail.users().messages().list_next(request, response)
         ids = ids[:limit]
 
-        messages = [
-            self.gmail.users()
-            .messages()
-            .get(userId="me", id=mid, format="full")
-            .execute()
-            for mid in ids
-        ]
+        fetched = self._gmail_batch_get(
+            [
+                (
+                    mid,
+                    self.gmail.users()
+                    .messages()
+                    .get(
+                        userId="me",
+                        id=mid,
+                        format="metadata",
+                        metadataHeaders=["From", "Subject"],
+                    ),
+                )
+                for mid in ids
+            ]
+        )
+        messages = [fetched[mid] for mid in ids if mid in fetched]
 
         if label:
             messages = gmail.filter_by_label(messages, label)
@@ -484,3 +551,65 @@ class Workspace:
             messages = gmail.filter_by_term(messages, term)
 
         return [gmail.summarise(m) for m in messages]
+
+    def _find_or_create_folder(self, name: str, parent: str) -> str:
+        """Drive folder id for `name` under `parent`, creating it if absent."""
+        query = (
+            f"name = '{escape_drive_query(name)}' and '{parent}' in parents "
+            f"and mimeType = '{FOLDER_MIME}' and trashed = false"
+        )
+        response = (
+            self.drive.files().list(q=query, fields="files(id)", pageSize=1).execute()
+        )
+        found = response.get("files", [])
+        if found:
+            return str(found[0]["id"])
+
+        created = (
+            self.drive.files()
+            .create(
+                body={"name": name, "mimeType": FOLDER_MIME, "parents": [parent]},
+                fields="id",
+            )
+            .execute()
+        )
+        return str(created["id"])
+
+    def gmail_archive_message(
+        self, message_id: str, *, parent: str = "root"
+    ) -> dict[str, Any]:
+        """Archive one message to Drive as a PDF, filed under a year folder.
+
+        Long-term home for messages worth keeping past Gmail's normal
+        cleanup cycle (receipts, records) — `<parent>/gfunk-archive/<year>/
+        <date>_<subject>_<id>.pdf`, not a zip, so it opens and searches like
+        any other document years from now.
+        """
+        raw = (
+            self.gmail.users()
+            .messages()
+            .get(userId="me", id=message_id, format="raw")
+            .execute()
+        )
+        internal_date = str(raw.get("internalDate", ""))
+        content = gmail.decode_raw_message(str(raw["raw"]))
+        parsed = gmail.parse_email_backup(content)
+        pdf_bytes = gmail.render_archive_pdf(parsed["metadata"], parsed["body_html"])
+        name = gmail.archive_filename(
+            message_id, internal_date, parsed["metadata"]["subject"]
+        )
+
+        archive_root = self._find_or_create_folder(ARCHIVE_ROOT_NAME, parent)
+        year_folder = self._find_or_create_folder(
+            gmail.archive_year(internal_date), archive_root
+        )
+
+        from googleapiclient.http import MediaInMemoryUpload
+
+        media = MediaInMemoryUpload(pdf_bytes, mimetype="application/pdf")
+        metadata: dict[str, Any] = {"name": name, "parents": [year_folder]}
+        return dict(
+            self.drive.files()
+            .create(body=metadata, media_body=media, fields="id, name, webViewLink")
+            .execute()
+        )

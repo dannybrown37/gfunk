@@ -53,7 +53,7 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             ),
             (
                 "holla",
-                ["email"],
+                ["emails"],
                 "Filter Gmail messages by label and/or search term",
             ),
         ],
@@ -248,7 +248,7 @@ def _add_holla_parser(sub: Any) -> None:
     holla = sub.add_parser(
         "holla",
         aliases=["email"],
-        help="Filter Gmail messages by label and/or search term",
+        help="Browse Gmail labels/messages (TUI); filter by label/term to script it",
     )
     holla.add_argument("--label", help="Gmail label id to filter by, e.g. IMPORTANT")
     holla.add_argument(
@@ -1507,6 +1507,15 @@ def cmd_holla(args: argparse.Namespace) -> int:
 
     with status("Signing in to Google"):
         workspace = Workspace.connect()
+
+    if not args.json and not args.label and not args.term and sys.stdin.isatty():
+        from gfunk.holla_tui import HollaApp
+
+        with status("Reading label counts"):
+            labels = workspace.gmail_labels()
+        HollaApp(labels, workspace).run()
+        return 0
+
     with status(f"Reading up to {args.limit} messages"):
         messages = workspace.gmail_messages(
             label=args.label, term=args.term, limit=args.limit

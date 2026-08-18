@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -5,6 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from gfunk.cache import Cache
+
+BatchCallback = Callable[[str, Any, "Exception | None"], None]
 
 
 def build_drive(pages: list[dict[str, Any]]) -> MagicMock:
@@ -24,10 +27,16 @@ def build_drive(pages: list[dict[str, Any]]) -> MagicMock:
     return drive
 
 
-def build_gmail(message_ids: list[str], messages_by_id: dict[str, Any]) -> MagicMock:
+def build_gmail(
+    message_ids: list[str],
+    messages_by_id: dict[str, Any],
+    labels: list[dict[str, Any]] | None = None,
+) -> MagicMock:
     """A Gmail service whose messages().list() returns `message_ids`, one page.
 
-    `.get(id=...)` looks up the full message from `messages_by_id`.
+    `.get(id=...)` looks up the full message from `messages_by_id`. `labels`, if
+    given, backs `users().labels().list()`/`.get()` (each entry needs `id`, `name`,
+    `type`, `messagesTotal`, `messagesUnread`).
     """
     gmail = MagicMock()
     list_execute = (
@@ -42,6 +51,56 @@ def build_gmail(message_ids: list[str], messages_by_id: dict[str, Any]) -> Magic
         return result
 
     gmail.users.return_value.messages.return_value.get.side_effect = get
+
+    def modify(**kwargs: str | dict[str, list[str]]) -> MagicMock:
+        mid = str(kwargs["id"])
+        body = kwargs["body"]
+        assert isinstance(body, dict)
+        message = dict(messages_by_id[mid])
+        label_ids = set(message.get("labelIds", []))
+        label_ids |= set(body.get("addLabelIds", []))
+        label_ids -= set(body.get("removeLabelIds", []))
+        message["labelIds"] = sorted(label_ids)
+        result = MagicMock()
+        result.execute.return_value = message
+        return result
+
+    gmail.users.return_value.messages.return_value.modify.side_effect = modify
+
+    labels = labels or []
+    labels_by_id = {entry["id"]: entry for entry in labels}
+    labels_list_execute = (
+        gmail.users.return_value.labels.return_value.list.return_value.execute
+    )
+    labels_list_execute.return_value = {
+        "labels": [{"id": entry["id"]} for entry in labels]
+    }
+
+    def labels_get(**kwargs: str) -> MagicMock:
+        result = MagicMock()
+        result.execute.return_value = labels_by_id[kwargs["id"]]
+        return result
+
+    gmail.users.return_value.labels.return_value.get.side_effect = labels_get
+
+    responses_by_id = {**messages_by_id, **labels_by_id}
+
+    def new_batch_http_request() -> MagicMock:
+        added: list[tuple[str, BatchCallback]] = []
+
+        def add(_request: object, callback: BatchCallback, request_id: str) -> None:
+            added.append((request_id, callback))
+
+        def execute() -> None:
+            for request_id, callback in added:
+                callback(request_id, responses_by_id[request_id], None)
+
+        batch = MagicMock()
+        batch.add.side_effect = add
+        batch.execute.side_effect = execute
+        return batch
+
+    gmail.new_batch_http_request.side_effect = new_batch_http_request
     return gmail
 
 

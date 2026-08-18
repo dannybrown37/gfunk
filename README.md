@@ -98,7 +98,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dubs` | `duplicates` | Find duplicate files you own — exact hash matches, plus same-name Docs/Sheets to check by hand. TUI picker lets you keep one copy and trash the rest |
-| `holla` | `email` | Filter Gmail messages by label and/or search term |
+| `holla` | `email` | Browse Gmail labels/messages (TUI): counts, drill in, archive a message to Drive as a long-term PDF (filed by year), filter by sender/subject, sort by size, open in browser; `--label`/`--term`/`--json` for scripting |
 | `dj` | `scripts` | List your Apps Script projects, recent runs, pull/push source, or open one (triggers still browser-based) |
 | `mothership` | `mcp` | Start the MCP server on stdio |
 
@@ -135,6 +135,7 @@ gfunk/
 |       |-- dubs_tui.py
 |       |-- errors.py
 |       |-- gmail.py
+|       |-- holla_tui.py
 |       |-- mcp_config.py
 |       |-- mothership.py
 |       |-- mothership_config.py
@@ -170,6 +171,7 @@ gfunk/
 |   |-- test_dubs_tui.py
 |   |-- test_errors.py
 |   |-- test_gmail.py
+|   |-- test_holla_tui.py
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py
 |   |-- test_mothership_config.py
@@ -182,6 +184,7 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
+|-- BACKLOG.md
 |-- CLAUDE.md
 |-- pyproject.toml
 |-- README.md
