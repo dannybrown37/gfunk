@@ -177,8 +177,8 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("j", "cursor_down", "j ↓"),
         Binding("k", "cursor_up", "k ↑"),
-        Binding("g", "scroll_top", "gg top"),
-        Binding("G", "scroll_bottom", "G bottom", key_display="G"),
+        Binding("g", "scroll_top", "gg top", show=False),
+        Binding("G", "scroll_bottom", "G bottom", key_display="G", show=False),
         Binding("/", "filter", "/ filter"),
         Binding("O", "open_selected", "O open", key_display="O"),
         Binding("D", "delete_selected", "D delete", key_display="D"),

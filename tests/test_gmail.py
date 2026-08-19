@@ -269,6 +269,50 @@ def test_is_archivable_attachment(content_type: str, *, expected: bool) -> None:
     assert is_archivable_attachment(content_type) is expected
 
 
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        ("Invoice099790.Pdf", True),
+        ("report.docx", True),
+        ("photo.png", False),
+        ("readme.txt", False),
+    ],
+)
+def test_is_archivable_attachment_falls_back_to_extension(
+    filename: str, *, expected: bool
+) -> None:
+    # Service-invoice systems (car dealerships, etc.) commonly label every
+    # attachment `application/octet-stream` regardless of its real type.
+    from gfunk.gmail import is_archivable_attachment
+
+    assert is_archivable_attachment("application/octet-stream", filename) is expected
+
+
+def test_parse_email_backup_recovers_pdf_mislabeled_as_octet_stream() -> None:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "donotreply@bfrc.com"
+    msg["Subject"] = "Invoice # 099790"
+    msg.set_content("Service invoice documents attached.")
+    msg.add_attachment(
+        b"pdf-bytes",
+        maintype="application",
+        subtype="octet-stream",
+        filename="Invoice099790.Pdf",
+    )
+
+    parsed = parse_email_backup(msg.as_bytes())
+
+    assert parsed["attachments"] == [
+        {
+            "filename": "Invoice099790.Pdf",
+            "content": b"pdf-bytes",
+            "content_type": "application/pdf",
+        }
+    ]
+
+
 def test_parse_email_backup_converts_html_only_body_to_text() -> None:
     parsed = parse_email_backup(_build_raw_message(html_only=True, attachment=None))
 

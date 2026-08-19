@@ -29,17 +29,52 @@ ARCHIVABLE_ATTACHMENT_TYPES = frozenset(
     }
 )
 
+EXTENSION_CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ),
+}
+ARCHIVABLE_ATTACHMENT_EXTENSIONS = frozenset(EXTENSION_CONTENT_TYPES)
 
-def is_archivable_attachment(content_type: str) -> bool:
+
+def is_archivable_attachment(content_type: str, filename: str = "") -> bool:
     """True for attachments worth keeping (images, PDFs, Office docs).
 
     False for incidental parts that ride along with an email but aren't a
     "real" attachment a person meant to send — inline HTML alternatives,
     signature images embedded as text/plain, etc.
+
+    Some senders (service-invoice systems) mislabel every attachment as
+    `application/octet-stream` regardless of its real type, so a mismatched
+    content type falls back to the filename's extension.
     """
-    return (
-        content_type.startswith("image/") or content_type in ARCHIVABLE_ATTACHMENT_TYPES
+    if content_type.startswith("image/") or content_type in ARCHIVABLE_ATTACHMENT_TYPES:
+        return True
+    return any(
+        filename.lower().endswith(ext) for ext in ARCHIVABLE_ATTACHMENT_EXTENSIONS
     )
+
+
+def resolve_attachment_content_type(content_type: str, filename: str) -> str:
+    """Real MIME type for an attachment upload.
+
+    Falls back to guessing from the filename extension when a sender labels
+    everything `application/octet-stream` — Drive needs the real type to
+    preview the file instead of offering a generic binary download.
+    """
+    if content_type != "application/octet-stream":
+        return content_type
+    lower_name = filename.lower()
+    for ext, mime in EXTENSION_CONTENT_TYPES.items():
+        if lower_name.endswith(ext):
+            return mime
+    return content_type
 
 
 def decode_raw_message(raw: str) -> bytes:
@@ -149,13 +184,15 @@ def parse_email_backup(raw_bytes: bytes) -> dict[str, Any]:
         {
             "filename": part.get_filename() or "attachment",
             "content": part.get_payload(decode=True) or b"",
-            "content_type": part.get_content_type(),
+            "content_type": resolve_attachment_content_type(
+                part.get_content_type(), part.get_filename() or ""
+            ),
         }
         for part in msg.walk()
         if part is not body_part
         and part.get_content_maintype() != "multipart"
         and part.get_filename() is not None
-        and is_archivable_attachment(part.get_content_type())
+        and is_archivable_attachment(part.get_content_type(), part.get_filename() or "")
     ]
 
     return {
