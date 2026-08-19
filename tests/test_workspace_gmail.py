@@ -163,6 +163,7 @@ def test_gmail_archive_message_uploads_pdf_under_year_folder(
     drive.files.return_value.create.return_value.execute.side_effect = [
         {"id": "root-folder"},
         {"id": "year-folder"},
+        {"id": "message-folder"},
         {
             "id": "d1",
             "name": "2024-01-01_invoice-42_m1.pdf",
@@ -182,19 +183,21 @@ def test_gmail_archive_message_uploads_pdf_under_year_folder(
     assert create_calls[0].kwargs["body"]["name"] == "gfunk-archive"
     assert create_calls[1].kwargs["body"]["name"] == "2024"
     assert create_calls[1].kwargs["body"]["parents"] == ["root-folder"]
-    upload_kwargs = create_calls[2].kwargs
+    assert create_calls[2].kwargs["body"]["name"] == "2024-01-01_invoice-42_m1"
+    assert create_calls[2].kwargs["body"]["parents"] == ["year-folder"]
+    upload_kwargs = create_calls[3].kwargs
     assert upload_kwargs["body"] == {
         "name": "2024-01-01_invoice-42_m1.pdf",
-        "parents": ["year-folder"],
+        "parents": ["message-folder"],
     }
     media_body = upload_kwargs["media_body"]
     uploaded_bytes = media_body.getbytes(0, media_body.size())
     assert uploaded_bytes.startswith(b"%PDF")
 
-    attachment_kwargs = create_calls[3].kwargs
+    attachment_kwargs = create_calls[4].kwargs
     assert attachment_kwargs["body"] == {
-        "name": "m1_invoice.pdf",
-        "parents": ["year-folder"],
+        "name": "invoice.pdf",
+        "parents": ["message-folder"],
     }
     attachment_media = attachment_kwargs["media_body"]
     assert attachment_media.getbytes(0, attachment_media.size()) == b"pdf-bytes"
@@ -222,7 +225,8 @@ def test_gmail_archive_message_reuses_existing_year_folder(cache: Cache) -> None
 
     ws.gmail_archive_message("m1")
 
-    # No folder creation calls — just the PDF upload and the one attachment.
+    # Every folder lookup (root/year/message) resolves to the same existing
+    # folder, so no folder creation calls — just the PDF upload and attachment.
     assert drive.files.return_value.create.call_count == 2
     for create_call in drive.files.return_value.create.call_args_list:
         assert create_call.kwargs["body"]["parents"] == ["existing-folder"]

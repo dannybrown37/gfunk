@@ -589,6 +589,12 @@ class Workspace:
         any other document years from now. `group` defaults to the message's
         year; pass an explicit `group` (e.g. a label name) to file everything
         together instead of splitting by year.
+
+        A message with attachments gets its own `<date>_<subject>_<id>/`
+        subfolder holding the rendered PDF plus every attachment, so the
+        pieces of one email stay together instead of scattering loose files
+        across the group folder. A message with no attachments stays a
+        single loose PDF — a folder for one file is just noise.
         """
         raw = (
             self.gmail.users()
@@ -608,10 +614,17 @@ class Workspace:
         group_name = group if group is not None else gmail.archive_year(internal_date)
         group_folder = self._find_or_create_folder(group_name, archive_root)
 
+        if parsed["attachments"]:
+            dest_folder = self._find_or_create_folder(
+                name.removesuffix(".pdf"), group_folder
+            )
+        else:
+            dest_folder = group_folder
+
         from googleapiclient.http import MediaInMemoryUpload
 
         media = MediaInMemoryUpload(pdf_bytes, mimetype="application/pdf")
-        metadata: dict[str, Any] = {"name": name, "parents": [group_folder]}
+        metadata: dict[str, Any] = {"name": name, "parents": [dest_folder]}
         result = dict(
             self.drive.files()
             .create(body=metadata, media_body=media, fields="id, name, webViewLink")
@@ -623,8 +636,8 @@ class Workspace:
                 attachment["content"], mimetype=attachment["content_type"]
             )
             attachment_metadata: dict[str, Any] = {
-                "name": f"{message_id}_{attachment['filename']}",
-                "parents": [group_folder],
+                "name": attachment["filename"],
+                "parents": [dest_folder],
             }
             self.drive.files().create(
                 body=attachment_metadata, media_body=attachment_media, fields="id"
