@@ -3,11 +3,13 @@
 Two screens in one app: a label overview (counts, no message fetch) and a
 per-label message list (metadata only — sender/subject, no body). From the
 message list you can filter by sender/subject, archive a message to Drive
-as a long-term PDF, or open it in the browser.
+as a long-term PDF, or open it in the browser. From the label overview, the
+same archive/delete keys act on the whole label instead of one message.
 """
 
 from __future__ import annotations
 
+import re
 import webbrowser
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -16,12 +18,22 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
+from textual.widgets import (
+    Footer,
+    Header,
+    Input,
+    ListItem,
+    ListView,
+    LoadingIndicator,
+    Static,
+)
 
 from gfunk.browser import register
 from gfunk.workspace import FOLDER_MIME
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from textual.timer import Timer
 
     from gfunk.workspace import Workspace
@@ -81,6 +93,16 @@ class MessageItem(ListItem):
 
 
 SELECT_HERE_ID = "__select__"
+_LEADING_NUMBER = re.compile(r"^\[?(\d+)\]?\s*")
+
+
+def _natural_sort_key(name: str) -> tuple[int, int | str]:
+    match = _LEADING_NUMBER.match(name)
+    if match:
+        return (0, int(match.group(1)))
+    return (1, name.lower())
+
+
 UP_ID = "__up__"
 SELECT_HERE = {"id": SELECT_HERE_ID, "name": "· archive here ·"}
 UP = {"id": UP_ID, "name": ".. (up)"}
@@ -96,6 +118,8 @@ class FolderBrowseScreen(ModalScreen[str | None]):
     """Drive folder picker — snoop-style: drill into folders, pick one to archive."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("j", "cursor_down", "j ↓"),
+        Binding("k", "cursor_up", "k ↑"),
         Binding("escape", "cancel", "esc cancel"),
     ]
 
@@ -114,7 +138,10 @@ class FolderBrowseScreen(ModalScreen[str | None]):
 
     def _load(self) -> None:
         children = self._workspace.children(self._folder_id)
-        folders = [c for c in children if c.get("mimeType") == FOLDER_MIME]
+        folders = sorted(
+            (c for c in children if c.get("mimeType") == FOLDER_MIME),
+            key=lambda c: _natural_sort_key(str(c["name"])),
+        )
         list_view = self.query_one(ListView)
         list_view.clear()
         list_view.append(FolderItem(SELECT_HERE))
@@ -141,6 +168,12 @@ class FolderBrowseScreen(ModalScreen[str | None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+    def action_cursor_down(self) -> None:
+        self.query_one(ListView).action_cursor_down()
+
+    def action_cursor_up(self) -> None:
+        self.query_one(ListView).action_cursor_up()
 
 
 PREVIEW_DEBOUNCE_SECONDS = 0.3
@@ -191,6 +224,42 @@ class ConfirmDeleteLabelScreen(ModalScreen[bool]):
         self.dismiss(result=False)
 
 
+class ConfirmArchiveLabelScreen(ModalScreen[bool]):
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("y", "dismiss_true", "y confirm", show=False),
+        Binding("n", "dismiss_false", "n cancel", show=False),
+        Binding("escape", "dismiss_false", "esc cancel", show=False),
+    ]
+
+    def __init__(self, name: str, count: int) -> None:
+        super().__init__()
+        self._name = name
+        self._count = count
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            f"Archive all {self._count} messages in '{self._name}' to Drive? [y/n]"
+        )
+        yield Footer()
+
+    def action_dismiss_true(self) -> None:
+        self.dismiss(result=True)
+
+    def action_dismiss_false(self) -> None:
+        self.dismiss(result=False)
+
+
+class BusyScreen(ModalScreen[None]):
+    """Spinner shown while a blocking Drive/Gmail call runs in the background."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__()
+        self._message = message
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(Static(self._message), LoadingIndicator())
+
+
 class HollaApp(App[None]):
     """Browse Gmail labels, drill into one, back messages up, filter by sender."""
 
@@ -229,8 +298,8 @@ class HollaApp(App[None]):
         Binding("enter", "open_label", "open", show=False),
         Binding("tab", "toggle_preview_focus", "tab preview"),
         Binding("/", "filter", "/ filter"),
-        Binding("a", "archive_message", "archive"),
-        Binding("shift+a", "archive_to", "archive to…", key_display="A"),
+        Binding("a", "archive_message", "archive (label if none)"),
+        Binding("A", "archive_to", "archive to… (label if none)"),
         Binding("d", "delete_message", "delete (label if empty)"),
         Binding("o", "open_message", "open"),
         Binding("s", "toggle_sort", "s date/size"),
@@ -505,13 +574,24 @@ class HollaApp(App[None]):
         self.push_screen(ConfirmDeleteLabelScreen(label["name"]), handle_confirm)
 
     def action_archive_message(self) -> None:
+        if self._current_label is None:
+            self._archive_label()
+            return
+
         message = self._highlighted_message()
         if message is None:
             return
-        result = self._workspace.gmail_archive_message(message["id"])
-        self.notify(f"Archived to Drive: {result['name']}")
+        self._run_archive(
+            "Archiving message…",
+            lambda: self._workspace.gmail_archive_message(message["id"]),
+            lambda result: self.notify(f"Archived to Drive: {result['name']}"),
+        )
 
     def action_archive_to(self) -> None:
+        if self._current_label is None:
+            self._archive_label_to()
+            return
+
         message = self._highlighted_message()
         if message is None:
             return
@@ -519,9 +599,68 @@ class HollaApp(App[None]):
         def handle_folder(folder_id: str | None) -> None:
             if folder_id is None:
                 return
-            result = self._workspace.gmail_archive_message(
-                message["id"], parent=folder_id
+            self._run_archive(
+                "Archiving message…",
+                lambda: self._workspace.gmail_archive_message(
+                    message["id"], parent=folder_id
+                ),
+                lambda result: self.notify(f"Archived to Drive: {result['name']}"),
             )
-            self.notify(f"Archived to Drive: {result['name']}")
+
+        self.push_screen(FolderBrowseScreen(self._workspace), handle_folder)
+
+    def _archive_label(self, *, parent: str = "root") -> None:
+        label = self._highlighted_label()
+        if label is None:
+            return
+
+        def handle_confirm(confirmed: bool | None) -> None:  # noqa: FBT001
+            if not confirmed:
+                return
+            self._run_archive(
+                f"Archiving '{label['name']}'…",
+                lambda: self._workspace.gmail_archive_label(
+                    label["id"], label["name"], parent=parent
+                ),
+                lambda results: self.notify(
+                    f"Archived {len(results)} messages to Drive."
+                ),
+            )
+
+        self.push_screen(
+            ConfirmArchiveLabelScreen(label["name"], int(label["messages_total"])),
+            handle_confirm,
+        )
+
+    def _run_archive(
+        self,
+        busy_message: str,
+        call: Callable[[], Any],
+        on_done: Callable[[Any], None],
+    ) -> None:
+        busy = BusyScreen(busy_message)
+        self.push_screen(busy)
+
+        def work() -> None:
+            try:
+                result = call()
+            except Exception as exc:  # noqa: BLE001
+                self.call_from_thread(busy.dismiss)
+                self.call_from_thread(self.notify, f"Archive failed: {exc}")
+                return
+            self.call_from_thread(busy.dismiss)
+            self.call_from_thread(on_done, result)
+
+        self.run_worker(work, thread=True)
+
+    def _archive_label_to(self) -> None:
+        label = self._highlighted_label()
+        if label is None:
+            return
+
+        def handle_folder(folder_id: str | None) -> None:
+            if folder_id is None:
+                return
+            self._archive_label(parent=folder_id)
 
         self.push_screen(FolderBrowseScreen(self._workspace), handle_folder)

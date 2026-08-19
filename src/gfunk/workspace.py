@@ -505,16 +505,7 @@ class Workspace:
             if label_id in details
         ]
 
-    def gmail_messages(
-        self, label: str | None = None, term: str | None = None, limit: int = 50
-    ) -> list[dict[str, Any]]:
-        """Recent message metadata (sender/subject/snippet/labels), filtered.
-
-        Fetches headers only (`format="metadata"`), never the message body — this is
-        an inventory tool, not a reader. `label` narrows the listing itself (fewer ids
-        fetched); `term` still has to filter client-side, applied after. The N
-        per-message `.get()` calls run as one batched round trip, not N.
-        """
+    def _gmail_list_message_ids(self, label: str | None, limit: int) -> list[str]:
         list_kwargs: dict[str, Any] = {"userId": "me", "maxResults": min(limit, 100)}
         if label:
             list_kwargs["labelIds"] = [label]
@@ -525,7 +516,19 @@ class Workspace:
             response = request.execute()
             ids.extend(m["id"] for m in response.get("messages", []))
             request = self.gmail.users().messages().list_next(request, response)
-        ids = ids[:limit]
+        return ids[:limit]
+
+    def gmail_messages(
+        self, label: str | None = None, term: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Recent message metadata (sender/subject/snippet/labels), filtered.
+
+        Fetches headers only (`format="metadata"`), never the message body — this is
+        an inventory tool, not a reader. `label` narrows the listing itself (fewer ids
+        fetched); `term` still has to filter client-side, applied after. The N
+        per-message `.get()` calls run as one batched round trip, not N.
+        """
+        ids = self._gmail_list_message_ids(label, limit)
 
         fetched = self._gmail_batch_get(
             [
@@ -576,14 +579,16 @@ class Workspace:
         return str(created["id"])
 
     def gmail_archive_message(
-        self, message_id: str, *, parent: str = "root"
+        self, message_id: str, *, parent: str = "root", group: str | None = None
     ) -> dict[str, Any]:
-        """Archive one message to Drive as a PDF, filed under a year folder.
+        """Archive one message to Drive as a PDF, filed under a group folder.
 
         Long-term home for messages worth keeping past Gmail's normal
-        cleanup cycle (receipts, records) — `<parent>/gfunk-archive/<year>/
+        cleanup cycle (receipts, records) — `<parent>/gfunk-archive/<group>/
         <date>_<subject>_<id>.pdf`, not a zip, so it opens and searches like
-        any other document years from now.
+        any other document years from now. `group` defaults to the message's
+        year; pass an explicit `group` (e.g. a label name) to file everything
+        together instead of splitting by year.
         """
         raw = (
             self.gmail.users()
@@ -600,19 +605,51 @@ class Workspace:
         )
 
         archive_root = self._find_or_create_folder(ARCHIVE_ROOT_NAME, parent)
-        year_folder = self._find_or_create_folder(
-            gmail.archive_year(internal_date), archive_root
-        )
+        group_name = group if group is not None else gmail.archive_year(internal_date)
+        group_folder = self._find_or_create_folder(group_name, archive_root)
 
         from googleapiclient.http import MediaInMemoryUpload
 
         media = MediaInMemoryUpload(pdf_bytes, mimetype="application/pdf")
-        metadata: dict[str, Any] = {"name": name, "parents": [year_folder]}
-        return dict(
+        metadata: dict[str, Any] = {"name": name, "parents": [group_folder]}
+        result = dict(
             self.drive.files()
             .create(body=metadata, media_body=media, fields="id, name, webViewLink")
             .execute()
         )
+
+        for attachment in parsed["attachments"]:
+            attachment_media = MediaInMemoryUpload(
+                attachment["content"], mimetype=attachment["content_type"]
+            )
+            attachment_metadata: dict[str, Any] = {
+                "name": f"{message_id}_{attachment['filename']}",
+                "parents": [group_folder],
+            }
+            self.drive.files().create(
+                body=attachment_metadata, media_body=attachment_media, fields="id"
+            ).execute()
+
+        return result
+
+    ARCHIVE_LABEL_LIMIT = 10_000
+
+    def gmail_archive_label(
+        self, label_id: str, label_name: str, *, parent: str = "root"
+    ) -> list[dict[str, Any]]:
+        """Archive every message in a label to Drive, one PDF each.
+
+        All messages land in one `<label_name>` folder rather than split by
+        year — a by-label archive is meant to be browsed as one pile, not
+        chopped up by when it happened to arrive. Reuses `gmail_archive_message`
+        per id — same recoverable (non-destructive) semantics: nothing is
+        removed from Gmail.
+        """
+        ids = self._gmail_list_message_ids(label_id, self.ARCHIVE_LABEL_LIMIT)
+        return [
+            self.gmail_archive_message(mid, parent=parent, group=label_name)
+            for mid in ids
+        ]
 
     def gmail_preview(self, message_id: str) -> str:
         """Plain-text body of one message, for on-demand reading in the TUI.

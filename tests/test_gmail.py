@@ -168,7 +168,7 @@ def _build_raw_message(
         msg.set_content("Your invoice is ready")
     if attachment is not None:
         msg.add_attachment(
-            attachment, maintype="text", subtype="plain", filename="invoice.txt"
+            attachment, maintype="application", subtype="pdf", filename="invoice.pdf"
         )
     return msg.as_bytes()
 
@@ -182,11 +182,91 @@ def test_parse_email_backup_extracts_metadata_body_and_attachments() -> None:
     assert parsed["body_html"] == "<pre>Your invoice is ready</pre>"
     assert parsed["attachments"] == [
         {
-            "filename": "invoice.txt",
+            "filename": "invoice.pdf",
             "content": b"file-bytes",
-            "content_type": "text/plain",
+            "content_type": "application/pdf",
         }
     ]
+
+
+def test_parse_email_backup_finds_pdf_nested_in_multipart_related() -> None:
+    # Some senders (service-invoice systems) attach a PDF inside the
+    # multipart/related that holds the HTML body, rather than as a sibling
+    # of it. `iter_attachments()` doesn't recurse into that and misses it.
+    from email.message import EmailMessage, MIMEPart
+
+    msg = EmailMessage()
+    msg["From"] = "donotreply@bfrc.com"
+    msg["Subject"] = "Invoice # 099790"
+    msg.set_content("Service invoice documents attached.")
+    msg.add_alternative(
+        "<html><body><p>Invoice attached</p></body></html>", subtype="html"
+    )
+    html_part = msg.get_payload(1)
+    assert isinstance(html_part, MIMEPart)
+    html_part.add_related(
+        b"pdf-bytes", maintype="application", subtype="pdf", filename="invoice.pdf"
+    )
+
+    parsed = parse_email_backup(msg.as_bytes())
+
+    assert parsed["attachments"] == [
+        {
+            "filename": "invoice.pdf",
+            "content": b"pdf-bytes",
+            "content_type": "application/pdf",
+        }
+    ]
+
+
+def test_parse_email_backup_drops_incidental_html_attachment() -> None:
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = "billing@example.com"
+    msg["Subject"] = "Invoice #42"
+    msg.set_content("Your invoice is ready")
+    msg.add_attachment(
+        b"<html>tracking pixel wrapper</html>",
+        maintype="text",
+        subtype="html",
+        filename="email.html",
+    )
+    msg.add_attachment(
+        b"pdf-bytes", maintype="application", subtype="pdf", filename="invoice.pdf"
+    )
+
+    parsed = parse_email_backup(msg.as_bytes())
+
+    assert parsed["attachments"] == [
+        {
+            "filename": "invoice.pdf",
+            "content": b"pdf-bytes",
+            "content_type": "application/pdf",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("content_type", "expected"),
+    [
+        ("application/pdf", True),
+        ("image/png", True),
+        ("image/jpeg", True),
+        ("application/msword", True),
+        (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            True,
+        ),
+        ("text/html", False),
+        ("text/plain", False),
+        ("application/octet-stream", False),
+    ],
+)
+def test_is_archivable_attachment(content_type: str, *, expected: bool) -> None:
+    from gfunk.gmail import is_archivable_attachment
+
+    assert is_archivable_attachment(content_type) is expected
 
 
 def test_parse_email_backup_converts_html_only_body_to_text() -> None:
@@ -226,4 +306,15 @@ def test_archive_filename_is_date_subject_slug_and_id() -> None:
 def test_render_archive_pdf_produces_pdf_bytes() -> None:
     metadata = {"from": "a@b.com", "subject": "hi"}
     pdf_bytes = render_archive_pdf(metadata, "<p>Receipt body</p>")
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_render_archive_pdf_survives_unparseable_outlook_css() -> None:
+    metadata = {"from": "a@b.com", "subject": "hi"}
+    body_html = (
+        "<style>[class*=MsoHyperlinkFollowed],[class*=MsoHyperlink],"
+        "[class=ii] a[href],a,a:active,a:hover{color:blue}</style>"
+        "<p>Receipt body</p>"
+    )
+    pdf_bytes = render_archive_pdf(metadata, body_html)
     assert pdf_bytes.startswith(b"%PDF")

@@ -17,6 +17,30 @@ SKIPPED_TAGS = frozenset({"script", "style"})
 
 SLUG_MAX_LEN = 40
 
+ARCHIVABLE_ATTACHMENT_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+)
+
+
+def is_archivable_attachment(content_type: str) -> bool:
+    """True for attachments worth keeping (images, PDFs, Office docs).
+
+    False for incidental parts that ride along with an email but aren't a
+    "real" attachment a person meant to send — inline HTML alternatives,
+    signature images embedded as text/plain, etc.
+    """
+    return (
+        content_type.startswith("image/") or content_type in ARCHIVABLE_ATTACHMENT_TYPES
+    )
+
 
 def decode_raw_message(raw: str) -> bytes:
     """Decode Gmail's urlsafe-base64 `raw` message field to RFC 822 bytes."""
@@ -117,13 +141,21 @@ def parse_email_backup(raw_bytes: bytes) -> dict[str, Any]:
         body = str(body_part.get_content()).strip()
         body_html = f"<pre>{_escape_html(body)}</pre>"
 
+    # `iter_attachments()` doesn't recurse into nested multipart/related
+    # parts, so a PDF attached inside one (common in service-invoice emails)
+    # is invisible to it. Walking the whole tree and keying off "has a
+    # filename" catches attachments regardless of how deep they're nested.
     attachments = [
         {
             "filename": part.get_filename() or "attachment",
             "content": part.get_payload(decode=True) or b"",
             "content_type": part.get_content_type(),
         }
-        for part in msg.iter_attachments()
+        for part in msg.walk()
+        if part is not body_part
+        and part.get_content_maintype() != "multipart"
+        and part.get_filename() is not None
+        and is_archivable_attachment(part.get_content_type())
     ]
 
     return {
@@ -136,6 +168,20 @@ def parse_email_backup(raw_bytes: bytes) -> dict[str, Any]:
 
 def _escape_html(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+_STYLE_TAG_RE = re.compile(r"<style\b[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL)
+
+
+def _strip_style_tags(html: str) -> str:
+    """Drop `<style>` blocks from an email body before PDF rendering.
+
+    xhtml2pdf's CSS parser predates modern selector syntax (e.g. Outlook's
+    `[class*=MsoHyperlink]`) and raises instead of skipping what it can't
+    parse — stripping the original page styling avoids the crash. Content
+    still renders, just without the sender's stylesheet.
+    """
+    return _STYLE_TAG_RE.sub("", html)
 
 
 def render_archive_pdf(metadata: dict[str, str], body_html: str) -> bytes:
@@ -158,7 +204,7 @@ def render_archive_pdf(metadata: dict[str, str], body_html: str) -> bytes:
     <html><body>
     <table>{header_rows}</table>
     <hr/>
-    {body_html}
+    {_strip_style_tags(body_html)}
     </body></html>
     """
     buffer = BytesIO()

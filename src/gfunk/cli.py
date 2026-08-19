@@ -54,7 +54,7 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             (
                 "holla",
                 ["emails"],
-                "Filter Gmail messages by label and/or search term",
+                "Email management: browse, archive to Drive, preview, delete",
             ),
         ],
     ),

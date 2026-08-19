@@ -203,6 +203,64 @@ def test_a_archives_the_highlighted_message() -> None:
     ws.gmail_archive_message.assert_called_once_with("m1")
 
 
+def test_a_on_label_view_prompts_and_archives_whole_label_on_confirm() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        ws.gmail_archive_label.return_value = [{"id": "d1"}, {"id": "d2"}]
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_archive_label.assert_called_once_with("INBOX", "INBOX", parent="root")
+
+
+def test_a_on_label_view_then_n_cancels_and_does_not_archive() -> None:
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_archive_label.assert_not_called()
+
+
+def test_shift_a_on_label_view_opens_folder_browser_then_confirms_and_archives() -> (
+    None
+):
+    async def run() -> MagicMock:
+        ws = MagicMock()
+        ws.children.return_value = [DOCS_FOLDER]
+        ws.gmail_archive_label.return_value = [{"id": "d1"}]
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("A")
+            await pilot.pause()
+            await pilot.press("down")
+            await pilot.press("enter")  # drill into Docs
+            await pilot.pause()
+            await pilot.press("enter")  # select here (index 0)
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            return ws
+
+    ws = asyncio.run(run())
+    ws.gmail_archive_label.assert_called_once_with("INBOX", "INBOX", parent="f-docs")
+
+
 class _ScreenHost(App[None]):
     """Minimal host app — pushes one screen on mount, optionally captures dismiss."""
 
@@ -329,7 +387,7 @@ def test_shift_a_opens_folder_browser_and_archives_to_chosen_folder() -> None:
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
-            await pilot.press("shift+a")
+            await pilot.press("A")
             await pilot.pause()
             await pilot.press("down")
             await pilot.press("enter")  # drill into Docs

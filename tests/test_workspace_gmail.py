@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from conftest import build_gmail
 
@@ -168,6 +168,7 @@ def test_gmail_archive_message_uploads_pdf_under_year_folder(
             "name": "2024-01-01_invoice-42_m1.pdf",
             "webViewLink": "https://drive.google.com/file/d/d1",
         },
+        {"id": "a1"},
     ]
     ws = Workspace(drive=drive, sheets=MagicMock(), cache=cache, gmail=gmail)
 
@@ -189,6 +190,14 @@ def test_gmail_archive_message_uploads_pdf_under_year_folder(
     media_body = upload_kwargs["media_body"]
     uploaded_bytes = media_body.getbytes(0, media_body.size())
     assert uploaded_bytes.startswith(b"%PDF")
+
+    attachment_kwargs = create_calls[3].kwargs
+    assert attachment_kwargs["body"] == {
+        "name": "m1_invoice.pdf",
+        "parents": ["year-folder"],
+    }
+    attachment_media = attachment_kwargs["media_body"]
+    assert attachment_media.getbytes(0, attachment_media.size()) == b"pdf-bytes"
 
 
 def test_gmail_archive_message_reuses_existing_year_folder(cache: Cache) -> None:
@@ -213,10 +222,10 @@ def test_gmail_archive_message_reuses_existing_year_folder(cache: Cache) -> None
 
     ws.gmail_archive_message("m1")
 
-    # No folder creation calls — only the final PDF upload.
-    assert drive.files.return_value.create.call_count == 1
-    upload_kwargs = drive.files.return_value.create.call_args.kwargs
-    assert upload_kwargs["body"]["parents"] == ["existing-folder"]
+    # No folder creation calls — just the PDF upload and the one attachment.
+    assert drive.files.return_value.create.call_count == 2
+    for create_call in drive.files.return_value.create.call_args_list:
+        assert create_call.kwargs["body"]["parents"] == ["existing-folder"]
 
 
 def test_gmail_preview_returns_plain_text_body(cache: Cache) -> None:
@@ -252,6 +261,51 @@ def test_gmail_trash_message_moves_to_trash(cache: Cache) -> None:
     gmail.users.return_value.messages.return_value.trash.assert_called_once_with(
         userId="me", id="m1"
     )
+
+
+def test_gmail_archive_label_archives_every_message_in_the_label(
+    cache: Cache,
+) -> None:
+    gmail = MagicMock()
+    list_execute = (
+        gmail.users.return_value.messages.return_value.list.return_value.execute
+    )
+    list_execute.return_value = {"messages": [{"id": "m1"}, {"id": "m2"}]}
+    gmail.users.return_value.messages.return_value.list_next.return_value = None
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, gmail=gmail)
+    ws.gmail_archive_message = MagicMock(  # type: ignore[method-assign]
+        side_effect=[{"id": "d1", "name": "m1.pdf"}, {"id": "d2", "name": "m2.pdf"}]
+    )
+
+    results = ws.gmail_archive_label(
+        "CATEGORY_PROMOTIONS", "Promotions", parent="folder-1"
+    )
+
+    assert [r["name"] for r in results] == ["m1.pdf", "m2.pdf"]
+    assert ws.gmail_archive_message.call_args_list == [
+        call("m1", parent="folder-1", group="Promotions"),
+        call("m2", parent="folder-1", group="Promotions"),
+    ]
+    gmail.users.return_value.messages.return_value.list.assert_called_once_with(
+        userId="me", maxResults=100, labelIds=["CATEGORY_PROMOTIONS"]
+    )
+
+
+def test_gmail_archive_label_defaults_to_root_parent(cache: Cache) -> None:
+    gmail = MagicMock()
+    list_execute = (
+        gmail.users.return_value.messages.return_value.list.return_value.execute
+    )
+    list_execute.return_value = {"messages": [{"id": "m1"}]}
+    gmail.users.return_value.messages.return_value.list_next.return_value = None
+    ws = Workspace(drive=MagicMock(), sheets=MagicMock(), cache=cache, gmail=gmail)
+    ws.gmail_archive_message = MagicMock(  # type: ignore[method-assign]
+        return_value={"id": "d1", "name": "m1.pdf"}
+    )
+
+    ws.gmail_archive_label("INBOX", "INBOX")
+
+    ws.gmail_archive_message.assert_called_once_with("m1", parent="root", group="INBOX")
 
 
 def test_gmail_delete_label_deletes_by_id(cache: Cache) -> None:
