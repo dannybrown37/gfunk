@@ -352,7 +352,13 @@ class HollaApp(App[None]):
         for item in [LabelItem(label) for label in labels]:
             list_view.append(item)
         if labels:
-            list_view.index = 0
+            # `clear()` only *schedules* removal of the old children — they can
+            # still be in `list_view._nodes` when `index = 0` runs right after,
+            # so the highlight lands on a stale (about-to-be-removed) item and
+            # the new list renders with nothing visibly selected. Deferring the
+            # assignment to `call_after_refresh` waits for the removal to
+            # actually finish first.
+            self.call_after_refresh(lambda: setattr(list_view, "index", 0))
         self.sub_title = ""
 
     def _show_messages(self) -> None:
@@ -362,11 +368,16 @@ class HollaApp(App[None]):
         for item in [MessageItem(m) for m in messages]:
             list_view.append(item)
         if messages:
-            list_view.index = 0
-            # `clear()` removes old children asynchronously, so the Highlighted
-            # event posted by the `index = 0` assignment above can still see a
-            # stale (pre-rebuild) item — sync the preview explicitly instead of
-            # relying on that event for this rebuild.
+            # `clear()` only *schedules* removal of the old children — they can
+            # still be in `list_view._nodes` when `index = 0` runs right after,
+            # so the highlight lands on a stale (about-to-be-removed) item and
+            # the new list renders with nothing visibly selected. Deferring the
+            # assignment to `call_after_refresh` waits for the removal to
+            # actually finish first.
+            self.call_after_refresh(lambda: setattr(list_view, "index", 0))
+            # Also: the Highlighted event posted by that assignment can still
+            # reference a stale (pre-rebuild) item — sync the preview
+            # explicitly instead of relying on that event for this rebuild.
             self._schedule_preview(messages[0])
         else:
             self._clear_preview()

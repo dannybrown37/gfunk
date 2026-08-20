@@ -539,6 +539,31 @@ def test_d_then_n_cancels_and_does_not_trash() -> None:
     ws.gmail_trash_message.assert_not_called()
 
 
+def test_deleting_down_to_one_message_still_shows_it_highlighted() -> None:
+    from textual.widgets import ListItem, ListView
+
+    async def run() -> bool:
+        ws = MagicMock()
+        ws.gmail_preview.return_value = ""
+        ws.gmail_messages.return_value = [MSG_1, MSG_2]
+        ws.gmail_trash_message.return_value = {"id": "m1"}
+        app = HollaApp([INBOX, PROMO], workspace=ws)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("d")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            list_view = app.query_one(ListView)
+            remaining = list_view.query(ListItem)
+            assert len(remaining) == 1
+            return remaining[0].highlighted
+
+    assert asyncio.run(run()) is True
+
+
 def test_d_removes_the_message_from_the_list_on_confirm() -> None:
     async def run() -> list[str]:
         ws = MagicMock()
