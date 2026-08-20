@@ -354,7 +354,7 @@ class SnoopApp(App[None]):
         self.push_screen(ActionMenuScreen(name, actions), handle_action)
 
     def _run_action(self, item: dict[str, Any], action: str) -> None:
-        if action == "View":
+        if action in ("View", "View (Vibe TUI)"):
             self._view(item)
         elif action == "Open in browser":
             open_in_browser(item)
@@ -369,17 +369,20 @@ class SnoopApp(App[None]):
     def _view(self, item: dict[str, Any]) -> None:
         mime = item.get("mimeType", "")
         if mime == SHEET_MIME:
-            from gfunk.vibe import VibeApp
-
-            rows = self._workspace.sample(item["id"], self._first_tab(item))
-            with self.suspend():
-                VibeApp(rows).run()
+            self.run_worker(self._view_sheet(item))
             return
         if mime == DOC_MIME:
             data = self._workspace.export(item["id"], "text/plain")
             self.notify(data.decode(errors="replace")[:500])
             return
         self.notify(f"{item.get('name', item['id'])} is not a Doc or Sheet.")
+
+    async def _view_sheet(self, item: dict[str, Any]) -> None:
+        from gfunk.vibe import VibeApp
+
+        rows = self._workspace.sample(item["id"], self._first_tab(item))
+        with self.suspend():
+            await VibeApp(rows).run_async()
 
     def _first_tab(self, item: dict[str, Any]) -> str:
         tabs = self._workspace.sheet_tabs(item["id"])

@@ -793,7 +793,9 @@ def _snoop_actions(item: dict[str, Any]) -> list[str]:
     from gfunk.workspace import DOC_MIME, SHEET_MIME
 
     mime = item.get("mimeType", "")
-    if mime in (SHEET_MIME, DOC_MIME):
+    if mime == SHEET_MIME:
+        return ["View (Vibe TUI)", *SNOOP_ACTIONS_BASE]
+    if mime == DOC_MIME:
         return ["View", *SNOOP_ACTIONS_BASE]
     return list(SNOOP_ACTIONS_BASE)
 
