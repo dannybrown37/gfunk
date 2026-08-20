@@ -44,17 +44,17 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             (
                 "regulate",
                 ["audit"],
-                "Audit and revoke who can reach the Drive files you own",
+                "TUI for auditing and revoking who can reach your Drive files",
             ),
             (
                 "dubs",
                 ["duplicates"],
-                "Find duplicate files in Drive you own, delete or open them",
+                "TUI to manage duplicate files on your Google Drive",
             ),
             (
                 "holla",
                 ["emails"],
-                "Email management: browse, archive to Drive, preview, delete",
+                "TUI for email storage management and Drive backup",
             ),
         ],
     ),
@@ -807,136 +807,14 @@ def _snoop_walk(
 ) -> int:
     limit = args.limit or 200
     name = start_name or ("My Drive" if start_id == "root" else start_id)
-    stack: list[tuple[str, str]] = [(start_id, name)]
 
     if not can_browse():
         listing = workspace.children(start_id, limit=limit)
         return emit(listing, f"gfunk snoop {quote(start_id)} --limit {limit}")
 
-    from shutil import which
+    from gfunk.snoop_tui import SnoopApp
 
-    gfunk_bin = quote(which("gfunk") or "gfunk")
-    # fzf single-quotes {1} itself; wrapping it in our own quotes here would
-    # double-quote the value and bake literal quote characters into the id.
-    preview = (
-        "id={1}; "
-        f'if [ -n "$id" ]; then {gfunk_bin} snoop "$id" --peek 2>&1; '
-        'else echo "(back up a level)"; fi'
-    )
-
-    while stack:
-        folder_id, _ = stack[-1]
-        path = "/".join(n for _, n in stack)
-        with status(f"Listing {path}"):
-            items = workspace.children(folder_id, limit=limit)
-
-        entries = snoop_entries(items, up=len(stack) > 1)
-        candidates = [
-            f"{item['id'] if item else ''}\t{label}" for label, item in entries.items()
-        ]
-        chosen = fzf_pick_multi(
-            candidates,
-            f"{path} — enter opens, tab multi-selects, esc goes up",
-            preview=preview,
-        )
-
-        if not chosen:
-            stack.pop()
-            continue
-
-        labels = [line.partition("\t")[2] for line in chosen]
-
-        if len(labels) > 1:
-            picked = [entries[label] for label in labels if label != UP]
-            items_only = [item for item in picked if item is not None]
-            if not items_only:
-                continue
-            return _snoop_act_bulk(workspace, items_only, folder_id=folder_id)
-
-        label = labels[0]
-        if label == UP:
-            stack.pop()
-            continue
-
-        item = entries[label]
-        assert item is not None
-        if is_folder(item):
-            stack.append((item["id"], item["name"]))
-            continue
-
-        action = fzf_pick(_snoop_actions(item), item["name"], abort_ok=True)
-        if action is None:
-            continue
-        return _snoop_act(
-            args, workspace, item, action, folder_id=folder_id, limit=limit
-        )
-
-    return 0
-
-
-def _snoop_act(
-    args: argparse.Namespace,
-    workspace: Any,
-    item: dict[str, Any],
-    action: str,
-    *,
-    folder_id: str,
-    limit: int,
-) -> int:
-    if action == "View":
-        return _snoop_target(args, workspace, item["id"])
-    if action == "Open in browser":
-        open_in_browser(item)
-        return emit(item, f"gfunk snoop {quote(folder_id)} --limit {limit}")
-    if action == "Print":
-        return _snoop_print(workspace, item)
-    if action == "Move":
-        return _snoop_move(workspace, item)
-    return _snoop_delete(workspace, item)
-
-
-def _snoop_act_bulk(
-    workspace: Any, items: list[dict[str, Any]], *, folder_id: str
-) -> int:
-    action = fzf_pick(["Move", "Delete"], f"{len(items)} selected", abort_ok=True)
-    if action is None:
-        return 0
-    if action == "Move":
-        return _snoop_move_bulk(workspace, items, folder_id=folder_id)
-    return _snoop_delete_bulk(workspace, items)
-
-
-def _snoop_move_bulk(
-    workspace: Any, items: list[dict[str, Any]], *, folder_id: str
-) -> int:
-    names = ", ".join(item.get("name", item["id"]) for item in items)
-    print(f"Moving {len(items)} items ({names})", file=sys.stderr)
-
-    result = pick_destination(workspace)
-    if result is None:
-        return 0
-    destination, dest_name = result
-
-    for item in items:
-        workspace.move(item["id"], add_parent=destination, remove_parent=folder_id)
-    print(f"Moved {len(items)} items → {dest_name}", file=sys.stderr)
-    return 0
-
-
-def _snoop_delete_bulk(workspace: Any, items: list[dict[str, Any]]) -> int:
-    names = ", ".join(item.get("name", item["id"]) for item in items)
-    if not confirm_yn(
-        f"Trash {len(items)} items ({names})? This can be undone from Drive's trash."
-    ):
-        print("Aborted.", file=sys.stderr)
-        return 0
-
-    for item in items:
-        workspace.trash(item["id"])
-    print(
-        f"Trashed {len(items)} items (recoverable from Drive's trash)",
-        file=sys.stderr,
-    )
+    SnoopApp(workspace, start_id=start_id, start_name=name, limit=limit).run()
     return 0
 
 
@@ -996,8 +874,8 @@ def _snoop_delete(workspace: Any, file_meta: dict[str, Any]) -> int:
     return 0
 
 
-def _snoop_peek(workspace: Any, file_meta: dict[str, Any]) -> int:
-    """A fast, non-interactive look at a file — what the fzf preview pane runs."""
+def snoop_preview_text(workspace: Any, file_meta: dict[str, Any]) -> str:
+    """A fast, non-interactive look at a file — what a preview pane shows."""
     from googleapiclient.errors import HttpError
 
     from gfunk.workspace import DOC_MIME, SHEET_MIME
@@ -1009,20 +887,23 @@ def _snoop_peek(workspace: Any, file_meta: dict[str, Any]) -> int:
     try:
         if mime == DOC_MIME:
             data = workspace.export(file_id, "text/plain")
-            print(data.decode(errors="replace")[:2000])
-        elif mime == SHEET_MIME:
+            return str(data.decode(errors="replace"))[:2000]
+        if mime == SHEET_MIME:
             tabs = workspace.sheet_tabs(file_id)
             if not tabs:
-                print(f"{name} (empty spreadsheet)")
-                return 0
+                return f"{name} (empty spreadsheet)"
             rows = workspace.sample(file_id, tabs[0], limit=10)
             from tabulate import tabulate
 
-            print(tabulate(rows, headers="keys"))
-        else:
-            print(f"{name}\n{mime}")
+            return str(tabulate(rows, headers="keys"))
     except HttpError:
-        print("(preview unavailable)")
+        return "(preview unavailable)"
+    else:
+        return f"{name}\n{mime}"
+
+
+def _snoop_peek(workspace: Any, file_meta: dict[str, Any]) -> int:
+    print(snoop_preview_text(workspace, file_meta))
     return 0
 
 

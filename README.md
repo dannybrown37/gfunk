@@ -46,7 +46,7 @@ walkthrough and the scriptable form, `gfunk mount-up --client-secrets <file>`.
 Already have a token? Everything else just works:
 
 ```bash
-gfunk snoop                                 # walk your Drive folders
+gfunk snoop                                 # walk your Drive folders (TUI, preview pane)
 gfunk snoop <file-id>                       # read a Doc or Sheet in the terminal
 gfunk snoop <file-id> --open                # open a Drive file in your browser
 gfunk snoop <sheet-id> 'Sheet1!A1:D50'      # interactive spreadsheet viewer (TUI)
@@ -94,7 +94,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | Command | Alias | What it does |
 |---|---|---|
 | `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
-| `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window. Tab multi-selects for bulk move/trash |
+| `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window (TUI with a live preview pane) |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dubs` | `duplicates` | Find duplicate files you own — exact hash matches, plus same-name Docs/Sheets to check by hand. TUI picker lets you keep one copy and trash the rest |
@@ -141,6 +141,7 @@ gfunk/
 |       |-- mothership_config.py
 |       |-- regulate.py
 |       |-- regulate_tui.py
+|       |-- snoop_tui.py
 |       |-- vibe.py
 |       `-- workspace.py
 |-- tests/
@@ -160,12 +161,11 @@ gfunk/
 |   |-- test_cli_peep.py
 |   |-- test_cli_peep_open.py
 |   |-- test_cli_regulate.py
-|   |-- test_cli_roll.py
 |   |-- test_cli_sample.py
-|   |-- test_cli_snoop_bulk.py
 |   |-- test_cli_snoop_delete.py
 |   |-- test_cli_snoop_move.py
 |   |-- test_cli_snoop_peek.py
+|   |-- test_cli_snoop_walk.py
 |   |-- test_cli_vibe.py
 |   |-- test_dubs.py
 |   |-- test_dubs_tui.py
@@ -177,6 +177,7 @@ gfunk/
 |   |-- test_mothership_config.py
 |   |-- test_regulate.py
 |   |-- test_regulate_tui.py
+|   |-- test_snoop_tui.py
 |   |-- test_workspace.py
 |   |-- test_workspace_gmail.py
 |   |-- test_workspace_script_files.py
