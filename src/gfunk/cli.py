@@ -30,6 +30,11 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
                 ["browse"],
                 "Walk your Google Drive folders, act on docs and sheets",
             ),
+            (
+                "vibe",
+                ["sheet"],
+                "Open a spreadsheet in the interactive viewer (TUI)",
+            ),
             ("drop", ["upload"], "Upload local files to Drive"),
             (
                 "bounce",
@@ -195,6 +200,29 @@ def _add_snoop_parser(sub: Any) -> None:
     )
 
 
+def _add_vibe_parser(sub: Any) -> None:
+    vibe = sub.add_parser(
+        "vibe",
+        aliases=["sheet"],
+        help="Open a spreadsheet in the interactive viewer (TUI)",
+    )
+    vibe.add_argument(
+        "target", nargs="?", help="Spreadsheet id (default: pick from recent)"
+    )
+    vibe.add_argument("cell_range", nargs="?", help="e.g. 'Sheet1!A1:D50'")
+    vibe.add_argument("--limit", type=int, default=None, help="Max rows")
+    vibe.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of a table"
+    )
+    vibe.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Write to file instead of stdout",
+    )
+    vibe.add_argument("--raw", action="store_true", help="Plain table output, no TUI")
+
+
 def _add_drop_parser(sub: Any) -> None:
     drop = sub.add_parser(
         "drop",
@@ -344,6 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_mount_up_parser(sub)
     _add_snoop_parser(sub)
+    _add_vibe_parser(sub)
     _add_drop_parser(sub)
     _add_bounce_parser(sub)
     _add_regulate_parser(sub)
@@ -938,6 +967,26 @@ def _snoop_doc(
         replay += f" -o {quote(str(output))}"
     print(f"\nRun again with:\n  {replay}", file=sys.stderr)
     return 0
+
+
+def cmd_vibe(args: argparse.Namespace) -> int:
+    """Open a spreadsheet in the interactive viewer (TUI)."""
+    from gfunk.workspace import Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    file_id = args.target
+    if not file_id:
+        file_id = pick_spreadsheet(workspace)
+        if not file_id:
+            return 0
+
+    with status("Reading file metadata"):
+        meta = workspace.file_meta(file_id)
+    name = meta.get("name", file_id)
+
+    return _snoop_sheet(args, workspace, file_id, name)
 
 
 def _snoop_sheet(
@@ -1684,6 +1733,8 @@ COMMANDS = {
     "login": cmd_mount_up,
     "snoop": cmd_snoop,
     "browse": cmd_snoop,
+    "vibe": cmd_vibe,
+    "sheet": cmd_vibe,
     "drop": cmd_drop,
     "upload": cmd_drop,
     "bounce": cmd_bounce,

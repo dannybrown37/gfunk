@@ -51,6 +51,8 @@ gfunk snoop <file-id>                       # read a Doc or Sheet in the termina
 gfunk snoop <file-id> --open                # open a Drive file in your browser
 gfunk snoop <sheet-id> 'Sheet1!A1:D50'      # interactive spreadsheet viewer (TUI)
 gfunk snoop <file-id> --peek                # quick non-interactive preview (used by browse too)
+gfunk vibe                                  # pick a recent spreadsheet (fzf), then open the TUI
+gfunk vibe <sheet-id> 'Sheet1!A1:D50'       # same as snoop, but sheets-only shortcut
 gfunk bounce <file-id> --format csv         # export to CSV, JSON, txt, etc.
 gfunk regulate                              # audit who can see your files
 gfunk dubs                                  # find duplicate files you own
@@ -95,6 +97,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 |---|---|---|
 | `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
 | `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window (TUI with a live preview pane) |
+| `vibe` | `sheet` | Open a spreadsheet in the interactive viewer (TUI) — bare call fzf-picks from recent spreadsheets |
 | `bounce` | `export` | Export (Sheets→CSV/JSON, Docs→txt/html) |
 | `regulate` | `audit` | Audit who can reach the Drive files you own |
 | `dubs` | `duplicates` | Find duplicate files you own — exact hash matches, plus same-name Docs/Sheets to check by hand. TUI picker lets you keep one copy and trash the rest |
@@ -167,6 +170,7 @@ gfunk/
 |   |-- test_cli_snoop_peek.py
 |   |-- test_cli_snoop_walk.py
 |   |-- test_cli_vibe.py
+|   |-- test_cli_vibe_command.py
 |   |-- test_dubs.py
 |   |-- test_dubs_tui.py
 |   |-- test_errors.py
