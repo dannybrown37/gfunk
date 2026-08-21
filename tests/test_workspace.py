@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 from conftest import build_drive, build_sheets
@@ -22,6 +22,72 @@ def test_rows_to_dicts_pads_short_rows() -> None:
 
 def test_rows_to_dicts_on_an_empty_sheet() -> None:
     assert rows_to_dicts([]) == []
+
+
+def test_connect_leaves_calendar_none_without_the_scope(cache: Cache) -> None:
+    with (
+        patch("gfunk.workspace.get_down", return_value=MagicMock()),
+        patch("gfunk.workspace.granted_scopes", return_value=set()),
+        patch("gfunk.workspace.build", return_value=MagicMock()),
+    ):
+        ws = Workspace.connect(cache=cache)
+
+    assert ws.calendar is None
+
+
+def test_connect_builds_calendar_when_scope_granted(cache: Cache) -> None:
+    from gfunk.auth import CALENDAR_SCOPE
+
+    with (
+        patch("gfunk.workspace.get_down", return_value=MagicMock()),
+        patch("gfunk.workspace.granted_scopes", return_value={CALENDAR_SCOPE}),
+        patch("gfunk.workspace.build", return_value=MagicMock()) as build,
+    ):
+        ws = Workspace.connect(cache=cache)
+
+    assert ws.calendar is not None
+    calls = [c.args[0] for c in build.call_args_list]
+    assert "calendar" in calls
+
+
+def test_connect_re_requests_calendar_scope_so_get_down_does_not_drop_it(
+    cache: Cache,
+) -> None:
+    """A prior --with-calendar grant must stay sticky on every later connect().
+
+    Regression: get_down() defaults to the base SCOPES; if connect() didn't pass
+    the calendar scope back in, get_down would see the cached token's scopes as
+    'changed' (narrower than what it just asked for) and re-auth down to base
+    scopes, silently dropping Calendar access the user already granted.
+    """
+    from gfunk.auth import CALENDAR_SCOPE, SCOPES
+
+    with (
+        patch("gfunk.workspace.granted_scopes", return_value={CALENDAR_SCOPE, *SCOPES}),
+        patch("gfunk.workspace.get_down", return_value=MagicMock()) as get_down,
+        patch("gfunk.workspace.build", return_value=MagicMock()),
+    ):
+        Workspace.connect(cache=cache)
+
+    assert get_down.call_args.kwargs["scopes"] == [*SCOPES, CALENDAR_SCOPE]
+
+
+def test_grind_asks_for_events_in_the_next_week(cache: Cache) -> None:
+    calendar = MagicMock()
+    calendar.events.return_value.list.return_value.execute.return_value = {
+        "items": [{"id": "1", "summary": "Standup"}]
+    }
+    ws = Workspace(
+        drive=MagicMock(), sheets=MagicMock(), cache=cache, calendar=calendar
+    )
+
+    events = ws.grind(days=7)
+
+    assert events == [{"id": "1", "summary": "Standup"}]
+    kwargs = calendar.events.return_value.list.call_args.kwargs
+    assert kwargs["calendarId"] == "primary"
+    assert kwargs["singleEvents"] is True
+    assert kwargs["orderBy"] == "startTime"
 
 
 def test_snoop_returns_files_and_caches_them(cache: Cache) -> None:

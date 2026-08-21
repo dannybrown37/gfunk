@@ -17,6 +17,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
 ]
 
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+
 DEFAULT_CONFIG_DIR = Path.home() / ".config" / "gfunk"
 DEFAULT_CLIENT_SECRETS = DEFAULT_CONFIG_DIR / "credentials.json"
 DEFAULT_TOKEN_PATH = DEFAULT_CONFIG_DIR / "token.json"
@@ -34,6 +36,17 @@ def _scopes_changed(token_path: Path, expected: list[str]) -> bool:
     if not saved:
         return False
     return set(expected) != set(saved)
+
+
+def granted_scopes(token_path: Path = DEFAULT_TOKEN_PATH) -> set[str]:
+    """Scopes the cached token actually carries, for feature-level opt-in checks."""
+    import json
+
+    try:
+        stored = json.loads(token_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return set()
+    return set(stored.get("scopes") or [])
 
 
 TokenState = Literal["none", "signed-in", "refreshable", "stale"]

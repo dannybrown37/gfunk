@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any
 from googleapiclient.discovery import build
 
 from gfunk import gmail
-from gfunk.auth import get_down
+from gfunk.auth import (
+    CALENDAR_SCOPE,
+    SCOPES,
+    DEFAULT_TOKEN_PATH,
+    get_down,
+    granted_scopes,
+)
 from gfunk.cache import Cache
 
 if TYPE_CHECKING:
@@ -105,21 +111,30 @@ class Workspace:
         cache: Cache,
         script: Any = None,
         gmail: Any = None,
+        *,
+        calendar: Any = None,
     ) -> None:
         self.drive = drive
         self.sheets = sheets
         self.cache = cache
         self.script = script
         self.gmail = gmail
+        self.calendar = calendar
 
     @classmethod
     def connect(cls, cache: Cache | None = None) -> Workspace:
-        creds = get_down()
+        existing = granted_scopes(DEFAULT_TOKEN_PATH)
+        has_calendar = CALENDAR_SCOPE in existing
+        scopes = [*SCOPES, CALENDAR_SCOPE] if has_calendar else None
+        creds = get_down(scopes=scopes)
         return cls(
             drive=build("drive", "v3", credentials=creds),
             sheets=build("sheets", "v4", credentials=creds),
             script=build("script", "v1", credentials=creds),
             gmail=build("gmail", "v1", credentials=creds),
+            calendar=build("calendar", "v3", credentials=creds)
+            if has_calendar
+            else None,
             cache=cache or Cache(),
         )
 
@@ -686,6 +701,29 @@ class Workspace:
         return dict(
             self.gmail.users().messages().trash(userId="me", id=message_id).execute()
         )
+
+    def grind(self, days: int = 7) -> list[dict[str, Any]]:
+        """Upcoming events on the primary calendar, next `days` days, earliest first.
+
+        Requires opt-in Calendar access (`gfunk mount-up --with-calendar`);
+        caller must check `self.calendar is not None` first.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        assert self.calendar is not None
+        now = datetime.now(UTC)
+        response = (
+            self.calendar.events()
+            .list(
+                calendarId="primary",
+                timeMin=now.isoformat(),
+                timeMax=(now + timedelta(days=days)).isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+        return list(response.get("items", []))
 
     def gmail_delete_label(self, label_id: str) -> None:
         """Permanently delete a label. Not recoverable — caller must confirm."""

@@ -64,6 +64,16 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
         ],
     ),
     (
+        "the hustle (calendar)",
+        [
+            (
+                "grind",
+                ["agenda"],
+                "Next week's Calendar events (needs `mount-up --with-calendar`)",
+            ),
+        ],
+    ),
+    (
         "the studio (apps)",
         [
             (
@@ -155,6 +165,25 @@ def _add_mount_up_parser(sub: Any) -> None:
     )
     mount_up.add_argument(
         "--no-sign-in", action="store_true", help="Install only; don't sign in"
+    )
+    mount_up.add_argument(
+        "--with-calendar",
+        action="store_true",
+        help="Also request read-only Calendar access, for `gfunk grind`",
+    )
+
+
+def _add_grind_parser(sub: Any) -> None:
+    grind = sub.add_parser(
+        "grind",
+        aliases=["agenda"],
+        help="Next week's Calendar events (opt-in: `mount-up --with-calendar`)",
+    )
+    grind.add_argument(
+        "--days", type=int, default=7, help="How many days ahead to show (default: 7)"
+    )
+    grind.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of a table"
     )
 
 
@@ -371,6 +400,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     _add_mount_up_parser(sub)
+    _add_grind_parser(sub)
     _add_snoop_parser(sub)
     _add_vibe_parser(sub)
     _add_drop_parser(sub)
@@ -465,11 +495,14 @@ def quote(value: str) -> str:
     return shell_quote(value)
 
 
-def sign_in(client_secrets: Path, token_path: Path) -> int:
-    from gfunk.auth import MissingClientSecretsError, get_down
+def sign_in(
+    client_secrets: Path, token_path: Path, *, with_calendar: bool = False
+) -> int:
+    from gfunk.auth import CALENDAR_SCOPE, SCOPES, MissingClientSecretsError, get_down
 
+    scopes = [*SCOPES, CALENDAR_SCOPE] if with_calendar else None
     try:
-        get_down(client_secrets=client_secrets, token_path=token_path)
+        get_down(client_secrets=client_secrets, token_path=token_path, scopes=scopes)
     except MissingClientSecretsError as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -613,11 +646,25 @@ def choose_download() -> Path | None:
     return Path(answer).expanduser() if answer else None
 
 
-def offer_sign_in(dest: Path, token: Path | None = None, *, skip: bool = False) -> int:
-    from gfunk.auth import DEFAULT_TOKEN_PATH, token_state
+def offer_sign_in(
+    dest: Path,
+    token: Path | None = None,
+    *,
+    skip: bool = False,
+    with_calendar: bool = False,
+) -> int:
+    from gfunk.auth import (
+        CALENDAR_SCOPE,
+        DEFAULT_TOKEN_PATH,
+        granted_scopes,
+        token_state,
+    )
 
     token = token or DEFAULT_TOKEN_PATH
-    if token_state(token) in ("signed-in", "refreshable"):
+    needs_calendar_reauth = with_calendar and CALENDAR_SCOPE not in granted_scopes(
+        token
+    )
+    if not needs_calendar_reauth and token_state(token) in ("signed-in", "refreshable"):
         print(f"\nAlready signed in; token cached at {token}.")
         print("Try:")
         print("  gfunk snoop <name>")
@@ -631,16 +678,18 @@ def offer_sign_in(dest: Path, token: Path | None = None, *, skip: bool = False) 
         print("\nWhen you are ready:")
         print("  gfunk mount-up")
         return 0
-    return sign_in(client_secrets=dest, token_path=token)
+    return sign_in(client_secrets=dest, token_path=token, with_calendar=with_calendar)
 
 
-def already_installed(dest: Path, token: Path | None = None) -> int:
+def already_installed(
+    dest: Path, token: Path | None = None, *, with_calendar: bool = False
+) -> int:
     print(f"OAuth client already installed at {dest}.")
     print("Replace it with:")
     print(f"  gfunk mount-up --reinstall --dest {quote(str(dest))}")
     print("Re-read the console steps with:")
     print("  gfunk mount-up --steps")
-    return offer_sign_in(dest, token)
+    return offer_sign_in(dest, token, with_calendar=with_calendar)
 
 
 def cmd_mount_up(args: argparse.Namespace) -> int:
@@ -657,7 +706,7 @@ def cmd_mount_up(args: argparse.Namespace) -> int:
     if source is None and not args.reinstall:
         installed = classify(dest)
         if installed == "installed":
-            return already_installed(dest, args.token)
+            return already_installed(dest, args.token, with_calendar=args.with_calendar)
         if installed != "missing":
             print(diagnose(installed, dest), file=sys.stderr)
 
@@ -686,7 +735,48 @@ def cmd_mount_up(args: argparse.Namespace) -> int:
         f"--dest {quote(str(dest))}"
     )
 
-    return offer_sign_in(dest, args.token, skip=args.no_sign_in)
+    return offer_sign_in(
+        dest, args.token, skip=args.no_sign_in, with_calendar=args.with_calendar
+    )
+
+
+def _grind_rows(events: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rows = []
+    for event in events:
+        start = event.get("start", {})
+        when = start.get("dateTime", start.get("date", ""))
+        rows.append(
+            {
+                "when": when,
+                "summary": event.get("summary", "(no title)"),
+                "location": event.get("location", ""),
+            }
+        )
+    return rows
+
+
+def cmd_grind(args: argparse.Namespace) -> int:
+    from gfunk.workspace import Workspace
+
+    with status("Signing in to Google"):
+        workspace = Workspace.connect()
+
+    if workspace.calendar is None:
+        print("Calendar isn't connected yet.", file=sys.stderr)
+        print("Opt in with:\n  gfunk mount-up --with-calendar", file=sys.stderr)
+        return 1
+
+    with status(f"Reading the next {args.days} days"):
+        events = workspace.grind(days=args.days)
+
+    if args.json:
+        return emit(events, f"gfunk grind --days {args.days} --json")
+
+    if not events:
+        print(f"No events in the next {args.days} days.")
+        return 0
+
+    return emit_table(_grind_rows(events), f"gfunk grind --days {args.days}")
 
 
 def pick(found: list[dict[str, Any]], header: str) -> dict[str, Any] | None:
@@ -1749,6 +1839,8 @@ COMMANDS = {
     "scripts": cmd_dj,
     "mothership": cmd_mothership,
     "mcp": cmd_mothership,
+    "grind": cmd_grind,
+    "agenda": cmd_grind,
 }
 
 

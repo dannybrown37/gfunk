@@ -43,6 +43,10 @@ installs it to `~/.config/gfunk/credentials.json` mode 0600, and offers to sign 
 `gfunk setup` is an alias, since that is what people type blind. Off a TTY it prints the
 walkthrough and the scriptable form, `gfunk mount-up --client-secrets <file>`.
 
+Calendar access is opt-in and separate: add `--with-calendar` to request it —
+`gfunk mount-up --with-calendar`. Without the flag, gfunk never asks Google for
+Calendar scope, and `gfunk grind` tells you to re-run with it.
+
 Already have a token? Everything else just works:
 
 ```bash
@@ -104,6 +108,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `holla` | `email` | Browse Gmail labels/messages (TUI): counts, drill in, archive a message to Drive as a long-term PDF (filed by year) — or, from the label view, archive a whole label at once, filed together in one folder by label name — filter by sender/subject, sort by size, open in browser, preview body (`tab` to scroll it with j/k), delete (trash), delete an empty label; `--label`/`--term`/`--json` for scripting |
 | `dj` | `scripts` | List your Apps Script projects, recent runs, pull/push source, or open one (triggers still browser-based) |
 | `mothership` | `mcp` | Start the MCP server on stdio |
+| `grind` | `agenda` | Next week's Calendar events. Opt-in: run `gfunk mount-up --with-calendar` first — without it, no Calendar scope is ever requested |
 
 ## Development
 
@@ -159,6 +164,7 @@ gfunk/
 |   |-- test_cli_dj_list.py
 |   |-- test_cli_drop.py
 |   |-- test_cli_dubs.py
+|   |-- test_cli_grind.py
 |   |-- test_cli_holla.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_peep.py

@@ -126,6 +126,63 @@ def test_mount_up_offers_to_sign_in_and_runs_it(tmp_path: Path) -> None:
     signed_in.assert_called_once()
 
 
+def test_mount_up_with_calendar_flag_requests_calendar_scope(tmp_path: Path) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="", create=True),
+        patch("gfunk.auth.get_down", return_value=None) as get_down,
+    ):
+        code = main_code(
+            [
+                "mount-up",
+                "--with-calendar",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
+        )
+
+    assert code == 0
+    _client_secrets, kwargs = get_down.call_args
+    from gfunk.auth import CALENDAR_SCOPE, SCOPES
+
+    assert kwargs["scopes"] == [*SCOPES, CALENDAR_SCOPE]
+
+
+def test_mount_up_without_with_calendar_requests_default_scopes(
+    tmp_path: Path,
+) -> None:
+    source = client_json(tmp_path)
+    dest = tmp_path / "config" / "credentials.json"
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="", create=True),
+        patch("gfunk.auth.get_down", return_value=None) as get_down,
+    ):
+        code = main_code(
+            [
+                "mount-up",
+                "--client-secrets",
+                str(source),
+                "--dest",
+                str(dest),
+                "--token",
+                str(tmp_path / "token.json"),
+            ]
+        )
+
+    assert code == 0
+    _args, kwargs = get_down.call_args
+    assert kwargs["scopes"] is None
+
+
 def test_mount_up_declining_sign_in_leaves_the_next_command(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -216,6 +273,64 @@ def test_mount_up_says_nothing_to_do_when_already_signed_in(
     asked.assert_not_called(), "already signed in; there is nothing to ask"
     assert "Already signed in" in out
     assert "gfunk snoop" in out, "point at the next useful command instead"
+
+
+def test_mount_up_with_calendar_reauths_a_token_missing_the_scope(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+    token = tmp_path / "config" / "token.json"
+    token.write_text(json.dumps({"scopes": ["https://www.googleapis.com/auth/drive"]}))
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", return_value="", create=True),
+        patch("gfunk.auth.token_state", return_value="signed-in"),
+        patch("gfunk.cli.sign_in", return_value=0) as signed_in,
+    ):
+        code = main_code(
+            ["mount-up", "--with-calendar", "--dest", str(dest), "--token", str(token)]
+        )
+
+    assert code == 0
+    signed_in.assert_called_once_with(
+        client_secrets=dest, token_path=token, with_calendar=True
+    )
+    assert "Already signed in" not in capsys.readouterr().out
+
+
+def test_mount_up_with_calendar_skips_reauth_when_scope_already_granted(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "config" / "credentials.json"
+    dest.parent.mkdir()
+    dest.write_text(client_json(tmp_path).read_text())
+    token = tmp_path / "config" / "token.json"
+    token.write_text(
+        json.dumps(
+            {
+                "scopes": [
+                    "https://www.googleapis.com/auth/drive",
+                    "https://www.googleapis.com/auth/calendar.readonly",
+                ]
+            }
+        )
+    )
+
+    with (
+        patch("sys.stdin.isatty", return_value=True),
+        patch("gfunk.cli.input", create=True) as asked,
+        patch("gfunk.auth.token_state", return_value="signed-in"),
+    ):
+        code = main_code(
+            ["mount-up", "--with-calendar", "--dest", str(dest), "--token", str(token)]
+        )
+
+    assert code == 0
+    asked.assert_not_called()
+    assert "Already signed in" in capsys.readouterr().out
 
 
 def test_mount_up_still_offers_sign_in_when_the_token_is_stale(

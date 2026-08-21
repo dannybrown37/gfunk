@@ -118,6 +118,17 @@ def test_token_state_names_what_the_cached_token_can_still_do(
         assert auth.token_state(token) == expected
 
 
+def test_granted_scopes_reads_the_cached_token(tmp_path: Path) -> None:
+    token = tmp_path / "token.json"
+    token.write_text(json.dumps({"scopes": SCOPES}))
+
+    assert auth.granted_scopes(token) == set(SCOPES)
+
+
+def test_granted_scopes_is_empty_when_no_token_cached(tmp_path: Path) -> None:
+    assert auth.granted_scopes(tmp_path / "missing.json") == set()
+
+
 def test_token_state_is_stale_when_scopes_narrower_than_required(
     tmp_path: Path,
 ) -> None:
