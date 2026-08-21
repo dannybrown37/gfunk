@@ -49,17 +49,17 @@ COMMAND_GROUPS: list[tuple[str, list[tuple[str, list[str], str]]]] = [
             (
                 "regulate",
                 ["audit"],
-                "TUI for auditing and revoking who can reach your Drive files",
+                "Audit and revoke who can reach your Drive files (TUI)",
             ),
             (
                 "dubs",
                 ["duplicates"],
-                "TUI to manage duplicate files on your Google Drive",
+                "Manage duplicate files on your Google Drive (TUI)",
             ),
             (
                 "holla",
                 ["emails"],
-                "TUI for email storage management and Drive backup",
+                "Email storage management and Drive backup (TUI)",
             ),
         ],
     ),
