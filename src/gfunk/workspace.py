@@ -702,8 +702,12 @@ class Workspace:
             self.gmail.users().messages().trash(userId="me", id=message_id).execute()
         )
 
-    def grind(self, days: int = 7) -> list[dict[str, Any]]:
-        """Upcoming events on the primary calendar, next `days` days, earliest first.
+    def grind(self, days: int = 7, *, since_days: int = 0) -> list[dict[str, Any]]:
+        """Events on the primary calendar, earliest first.
+
+        Spans `since_days` back to `days` ahead. `since_days` exists because
+        reviewing a week means looking at what actually happened as well as
+        what is coming.
 
         Requires opt-in Calendar access (`gfunk mount-up --with-calendar`);
         caller must check `self.calendar is not None` first.
@@ -716,7 +720,7 @@ class Workspace:
             self.calendar.events()
             .list(
                 calendarId="primary",
-                timeMin=now.isoformat(),
+                timeMin=(now - timedelta(days=since_days)).isoformat(),
                 timeMax=(now + timedelta(days=days)).isoformat(),
                 singleEvents=True,
                 orderBy="startTime",

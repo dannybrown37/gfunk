@@ -401,3 +401,24 @@ def test_file_meta_includes_parents() -> None:
 
     fields = drive.files.return_value.get.call_args.kwargs["fields"]
     assert "parents" in fields
+
+
+def test_grind_reaches_backwards_when_since_days_is_set(cache: Cache) -> None:
+    from datetime import datetime
+
+    calendar = MagicMock()
+    calendar.events.return_value.list.return_value.execute.return_value = {"items": []}
+    ws = Workspace(
+        drive=MagicMock(), sheets=MagicMock(), cache=cache, calendar=calendar
+    )
+
+    ws.grind(days=7, since_days=7)
+
+    kwargs = calendar.events.return_value.list.call_args.kwargs
+    span = datetime.fromisoformat(kwargs["timeMax"]) - datetime.fromisoformat(
+        kwargs["timeMin"]
+    )
+    assert span.days == 14
+    assert datetime.fromisoformat(kwargs["timeMin"]) < datetime.now(
+        datetime.fromisoformat(kwargs["timeMin"]).tzinfo
+    )

@@ -186,6 +186,13 @@ def _add_grind_parser(sub: Any) -> None:
         "--days", type=int, default=7, help="How many days ahead to show (default: 7)"
     )
     grind.add_argument(
+        "--since",
+        type=int,
+        default=0,
+        metavar="DAYS",
+        help="Also include this many days of past events (default: 0)",
+    )
+    grind.add_argument(
         "--json", action="store_true", help="Emit JSON instead of a table"
     )
 
@@ -893,19 +900,28 @@ def cmd_grind(args: argparse.Namespace) -> int:
         print("Opt in with:\n  gfunk mount-up --with-calendar", file=sys.stderr)
         return 1
 
-    with status(f"Reading the next {args.days} days"):
-        events = workspace.grind(days=args.days)
+    since = getattr(args, "since", 0)
+    span = f"the next {args.days} days"
+    if since:
+        span = f"{since} days back and {args.days} forward"
+
+    with status(f"Reading {span}"):
+        events = workspace.grind(days=args.days, since_days=since)
 
     if args.json:
-        return emit(events, f"gfunk grind --days {args.days} --json")
+        return emit(events, f"gfunk grind --days {args.days} --since {since} --json")
 
     if not events:
-        print(f"No events in the next {args.days} days.")
+        print(f"No events in {span}.")
         return 0
 
     from gfunk.grind_tui import GrindApp
 
-    GrindApp(events=events, start_date=date.today(), num_days=args.days).run()
+    GrindApp(
+        events=events,
+        start_date=date.today() - timedelta(days=since),
+        num_days=args.days + since,
+    ).run()
     return 0
 
 

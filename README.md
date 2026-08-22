@@ -108,7 +108,7 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `holla` | `email` | Browse Gmail labels/messages (TUI): counts, drill in, archive a message to Drive as a long-term PDF (filed by year) — or, from the label view, archive a whole label at once, filed together in one folder by label name — filter by sender/subject, sort by size, open in browser, preview body (`tab` to scroll it with j/k), delete (trash), delete an empty label; `--label`/`--term`/`--json` for scripting |
 | `dj` | `scripts` | List your Apps Script projects, recent runs, pull/push source, or open one (triggers still browser-based) |
 | `mothership` | `mcp` | Start the MCP server on stdio |
-| `grind` | `agenda` | Next week's Calendar events. Opt-in: run `gfunk mount-up --with-calendar` first — without it, no Calendar scope is ever requested |
+| `grind` | `agenda` | Next week's Calendar events — `--since DAYS` also reaches backwards, for reviewing a week that already happened. Opt-in: run `gfunk mount-up --with-calendar` first — without it, no Calendar scope is ever requested |
 
 ## Development
 

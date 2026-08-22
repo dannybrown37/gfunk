@@ -7,7 +7,7 @@ from gfunk.cli import cmd_grind
 
 
 def grind_args(**overrides: object) -> argparse.Namespace:
-    defaults: dict[str, object] = {"days": 7, "json": False}
+    defaults: dict[str, object] = {"days": 7, "json": False, "since": 0}
     return argparse.Namespace(**{**defaults, **overrides})
 
 
@@ -71,3 +71,19 @@ def test_grind_tells_you_to_opt_in_when_calendar_not_connected(
     err = capsys.readouterr().err
     assert "--with-calendar" in err
     ws.grind.assert_not_called()
+
+
+def test_grind_passes_since_through_to_workspace() -> None:
+    ws = _mock_workspace()
+    with patch("gfunk.workspace.Workspace.connect", return_value=ws):
+        cmd_grind(grind_args(json=True, since=7))
+
+    ws.grind.assert_called_once_with(days=7, since_days=7)
+
+
+def test_grind_replay_line_echoes_since(capsys: pytest.CaptureFixture[str]) -> None:
+    ws = _mock_workspace()
+    with patch("gfunk.workspace.Workspace.connect", return_value=ws):
+        cmd_grind(grind_args(json=True, since=3))
+
+    assert "--since 3" in capsys.readouterr().err
