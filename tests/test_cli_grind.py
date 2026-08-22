@@ -28,13 +28,16 @@ def _mock_workspace(*, has_calendar: bool = True) -> MagicMock:
     return ws
 
 
-def test_grind_shows_events_as_a_table(capsys: pytest.CaptureFixture[str]) -> None:
+def test_grind_launches_tui() -> None:
     ws = _mock_workspace()
-    with patch("gfunk.workspace.Workspace.connect", return_value=ws):
+    with (
+        patch("gfunk.workspace.Workspace.connect", return_value=ws),
+        patch("gfunk.grind_tui.GrindApp") as mock_app_cls,
+    ):
         rc = cmd_grind(grind_args())
 
     assert rc == 0
-    assert "Standup" in capsys.readouterr().out
+    mock_app_cls.return_value.run.assert_called_once()
 
 
 def test_grind_json_emits_json(capsys: pytest.CaptureFixture[str]) -> None:

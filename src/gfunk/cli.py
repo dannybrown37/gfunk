@@ -2,8 +2,11 @@ import argparse
 import json
 import sys
 import webbrowser
+from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -740,19 +743,143 @@ def cmd_mount_up(args: argparse.Namespace) -> int:
     )
 
 
-def _grind_rows(events: list[dict[str, Any]]) -> list[dict[str, str]]:
-    rows = []
+@dataclass
+class GrindDay:
+    date: date
+    events: list[dict[str, Any]] = field(default_factory=list)
+    all_day: list[str] = field(default_factory=list)
+    total_hours: float = 0.0
+    conflicts: int = 0
+    time_spans: list[tuple[datetime, datetime]] = field(default_factory=list)
+
+
+def _parse_dt(raw: str) -> datetime:
+    return datetime.fromisoformat(raw)
+
+
+def grind_days(
+    events: list[dict[str, Any]],
+    *,
+    start_date: date | None = None,
+    num_days: int | None = None,
+) -> list[GrindDay]:
+    buckets: dict[date, GrindDay] = defaultdict(lambda: GrindDay(date=date.min))
     for event in events:
-        start = event.get("start", {})
-        when = start.get("dateTime", start.get("date", ""))
-        rows.append(
-            {
-                "when": when,
-                "summary": event.get("summary", "(no title)"),
-                "location": event.get("location", ""),
-            }
-        )
-    return rows
+        start_raw = event.get("start", {})
+        if "date" in start_raw and "dateTime" not in start_raw:
+            d = date.fromisoformat(start_raw["date"])
+            bucket = buckets[d]
+            bucket.date = d
+            bucket.all_day.append(event.get("summary", "(no title)"))
+            continue
+
+        dt_start = _parse_dt(start_raw["dateTime"])
+        dt_end = _parse_dt(event.get("end", {}).get("dateTime", start_raw["dateTime"]))
+        d = dt_start.date()
+        bucket = buckets[d]
+        bucket.date = d
+        bucket.events.append(event)
+        bucket.time_spans.append((dt_start, dt_end))
+        hours = (dt_end - dt_start).total_seconds() / 3600
+        bucket.total_hours += hours
+
+    for bucket in buckets.values():
+        spans = sorted(bucket.time_spans)
+        for i in range(len(spans) - 1):
+            if spans[i][1] > spans[i + 1][0]:
+                bucket.conflicts += 1
+
+    if start_date is not None and num_days is not None:
+        for i in range(num_days):
+            d = start_date + timedelta(days=i)
+            if d not in buckets:
+                buckets[d] = GrindDay(date=d)
+
+    return sorted(buckets.values(), key=lambda d: d.date)
+
+
+_BAR_START = 8
+_BAR_END = 20
+_BAR_SLOTS = (_BAR_END - _BAR_START) * 2  # half-hour slots
+
+
+def grind_time_bar(
+    spans: list[tuple[datetime, datetime]],
+) -> str:
+    slots = ["░"] * _BAR_SLOTS
+    for start, end in spans:
+        s_idx = max(0, (start.hour - _BAR_START) * 2 + start.minute // 30)
+        e_idx = min(_BAR_SLOTS, (end.hour - _BAR_START) * 2 + end.minute // 30)
+        for i in range(s_idx, e_idx):
+            slots[i] = "█"
+    return "".join(slots)
+
+
+def _format_time(dt_str: str) -> str:
+    dt = _parse_dt(dt_str)
+    return dt.strftime("%-I:%M%p").lower()
+
+
+_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+_LOAD_LIGHT_HOURS = 2
+_LOAD_HEAVY_HOURS = 5
+
+_LOAD_LABEL = {
+    "light": "\033[32m light \033[0m",
+    "moderate": "\033[33m moderate \033[0m",
+    "heavy": "\033[31m heavy \033[0m",
+}
+
+
+def _short_location(loc: str) -> str:
+    if not loc:
+        return ""
+    return loc.split(",", maxsplit=1)[0]
+
+
+def _grind_render(days: list[GrindDay]) -> str:
+    lines: list[str] = []
+    for day in days:
+        day_name = _DAY_NAMES[day.date.weekday()]
+        header = f"\033[1m{day_name} {day.date.strftime('%b %d')}\033[0m"
+
+        if day.total_hours < _LOAD_LIGHT_HOURS:
+            load = _LOAD_LABEL["light"]
+        elif day.total_hours < _LOAD_HEAVY_HOURS:
+            load = _LOAD_LABEL["moderate"]
+        else:
+            load = _LOAD_LABEL["heavy"]
+
+        bar = grind_time_bar(day.time_spans)
+        count = len(day.events)
+        stats = f"{count} meeting{'s' if count != 1 else ''}, {day.total_hours:.1f}h"
+
+        lines.append(f"{header}  {stats} {load}")
+        lines.append(f"  8am {bar} 8pm")
+
+        for ad in day.all_day:
+            lines.append(f"  ▸ ALL DAY  {ad}")
+
+        for ev in day.events:
+            start_str = _format_time(ev["start"]["dateTime"])
+            end_raw = ev.get("end", {}).get("dateTime", "")
+            end_str = _format_time(end_raw) if end_raw else ""
+            summary = ev.get("summary", "(no title)")
+            loc = _short_location(ev.get("location", ""))
+            line = f"  ▸ {start_str}-{end_str}  {summary}"
+            if loc:
+                line += f"  📍 {loc}"
+            lines.append(line)
+
+        if day.conflicts:
+            lines.append(
+                f"  ⚠ {day.conflicts} conflict{'s' if day.conflicts != 1 else ''}"
+            )
+
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def cmd_grind(args: argparse.Namespace) -> int:
@@ -776,7 +903,10 @@ def cmd_grind(args: argparse.Namespace) -> int:
         print(f"No events in the next {args.days} days.")
         return 0
 
-    return emit_table(_grind_rows(events), f"gfunk grind --days {args.days}")
+    from gfunk.grind_tui import GrindApp
+
+    GrindApp(events=events, start_date=date.today(), num_days=args.days).run()
+    return 0
 
 
 def pick(found: list[dict[str, Any]], header: str) -> dict[str, Any] | None:

@@ -55,9 +55,9 @@ repos:
       - id: ruff-format
         args: [--config, .ruff.toml]
       - id: mypy
-      - id: pytest
-        args: [tests/, -q]
       # A secret scanner cannot find a real customer name or sheet ID. This
       # can. Public repo + Workspace data makes it the load-bearing one.
       - id: block-private-terms
       - id: embed-tree
+      - id: pytest
+        args: [tests/, -q]

@@ -143,6 +143,7 @@ gfunk/
 |       |-- dubs_tui.py
 |       |-- errors.py
 |       |-- gmail.py
+|       |-- grind_tui.py
 |       |-- holla_tui.py
 |       |-- mcp_config.py
 |       |-- mothership.py
@@ -181,6 +182,8 @@ gfunk/
 |   |-- test_dubs_tui.py
 |   |-- test_errors.py
 |   |-- test_gmail.py
+|   |-- test_grind_render.py
+|   |-- test_grind_tui.py
 |   |-- test_holla_tui.py
 |   |-- test_mcp_config.py
 |   |-- test_mothership.py
