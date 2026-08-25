@@ -75,4 +75,6 @@ ignore = [
 # Workspace is duck-typed here too, same as cli.py's snoop/regulate helpers.
 "src/gfunk/regulate_tui.py" = ["ANN401"]
 # PLR2004/EM101: a literal in an assertion is the assertion.
+# Screenshot capture script prints progress.
+"scripts/*" = ["T20"]
 "tests/*" = ["SLF001", "S105", "S106", "PLR2004", "EM101"]

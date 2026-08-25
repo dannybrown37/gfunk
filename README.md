@@ -110,6 +110,70 @@ sqlite3 ~/.local/share/gfunk/cache.db \
 | `mothership` | `mcp` | Start the MCP server on stdio |
 | `grind` | `agenda` | Next week's Calendar events — `--since DAYS` also reaches backwards, for reviewing a week that already happened. Opt-in: run `gfunk mount-up --with-calendar` first — without it, no Calendar scope is ever requested |
 
+### snoop — Drive browser
+
+**Folder browser** — folders, docs, sheets with dates:
+
+![snoop browse](docs/screenshots/snoop_browse.svg)
+
+**Preview pane** — select a file to see its content:
+
+![snoop preview](docs/screenshots/snoop_preview.svg)
+
+### vibe — spreadsheet viewer
+
+**Spreadsheet view** — navigate with h/j/k/l, zebra stripes:
+
+![vibe table](docs/screenshots/vibe_table.svg)
+
+**Search** — filter rows by any column:
+
+![vibe search](docs/screenshots/vibe_search.svg)
+
+### regulate — permission audit
+
+**Audit view** — files grouped by folder, exposure level, who can see them:
+
+![regulate audit](docs/screenshots/regulate_audit.svg)
+
+### dubs — duplicate finder
+
+**Duplicates view** — grouped by match type, keep/delete/open:
+
+![dubs groups](docs/screenshots/dubs_groups.svg)
+
+### holla — Gmail browser
+
+**Labels view** — drill into any label to see messages:
+
+![holla labels](docs/screenshots/holla_labels.svg)
+
+**Messages view** — filter, sort, archive, delete:
+
+![holla messages](docs/screenshots/holla_messages.svg)
+
+**Preview pane** — tab to open, j/k to scroll:
+
+![holla preview](docs/screenshots/holla_preview.svg)
+
+**Filter** — narrow by sender or subject:
+
+![holla filter](docs/screenshots/holla_filter.svg)
+
+**Sort by size** — find the big ones:
+
+![holla sorted](docs/screenshots/holla_sorted.svg)
+
+### grind — calendar agenda
+
+**Week view** — time bars, load indicators, conflict warnings:
+
+![grind week](docs/screenshots/grind_week.svg)
+
+**Expanded event** — attendees, location, duration:
+
+![grind expanded](docs/screenshots/grind_expanded.svg)
+
 ## Development
 
 ```bash
@@ -130,6 +194,23 @@ gfunk/
 |   `-- dependabot.yml
 |-- .vscode/
 |   `-- mcp.json
+|-- docs/
+|   `-- screenshots/
+|       |-- dubs_groups.svg
+|       |-- grind_expanded.svg
+|       |-- grind_week.svg
+|       |-- holla_filter.svg
+|       |-- holla_labels.svg
+|       |-- holla_messages.svg
+|       |-- holla_preview.svg
+|       |-- holla_sorted.svg
+|       |-- regulate_audit.svg
+|       |-- snoop_browse.svg
+|       |-- snoop_preview.svg
+|       |-- vibe_search.svg
+|       `-- vibe_table.svg
+|-- scripts/
+|   `-- capture_screenshots.py
 |-- src/
 |   `-- gfunk/
 |       |-- __init__.py
@@ -139,6 +220,7 @@ gfunk/
 |       |-- browser.py
 |       |-- cache.py
 |       |-- cli.py
+|       |-- demo_data.py
 |       |-- dubs.py
 |       |-- dubs_tui.py
 |       |-- errors.py
