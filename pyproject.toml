@@ -25,6 +25,7 @@ packages = ["src/gfunk"]
 
 [dependency-groups]
 dev = [
+    "commitizen>=4.10.0",
     "pytest>=8.0",
     "types-tabulate>=0.10.0.20260508",
 ]
@@ -36,6 +37,7 @@ testpaths = ["tests"]
 name = "cz_conventional_commits"
 version_provider = "pep621"
 tag_format = "v$version"
+major_version_zero = true
 update_changelog_on_bump = true
 
 [tool.mypy]

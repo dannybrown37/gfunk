@@ -74,7 +74,7 @@ gfunk names the missing flag and exits rather than hanging a CI job.
 
 ```json
 {
-  "mcpServers": {
+  "mcpServers": {1
     "gfunk": { "command": "uv", "args": ["run", "--project", "/path/to/gfunk", "gfunk", "mothership"] }
   }
 }
@@ -221,7 +221,8 @@ gfunk/
 |   `-- settings.json
 |-- .github/
 |   |-- workflows/
-|   |   `-- ci.yml
+|   |   |-- ci.yml
+|   |   `-- publish.yml
 |   `-- dependabot.yml
 |-- docs/
 |   `-- screenshots/
