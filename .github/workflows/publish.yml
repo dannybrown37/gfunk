@@ -1,5 +1,5 @@
 # Publish to PyPI when a version tag is pushed (trusted publisher / OIDC).
-# Workflow: uv run cz bump && git push --follow-tags
+# Use: scripts/release.py to bump, review, tag, and push.
 name: publish
 
 on:

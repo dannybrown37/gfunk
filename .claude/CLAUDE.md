@@ -6,7 +6,7 @@ CLI and MCP server for Google Workspace. Python 3.13+, uv, strict mypy.
 
 ```bash
 uv sync                       # install
-uv run pytest tests/ -q       # run tests (one at a time — no parallel)
+uv run pytest tests/ -q       # run tests (uses -n 6 via xdist)
 uv run pre-commit run --all-files  # lint, format, type-check, test
 uv run gfunk --version        # smoke test
 ```
@@ -20,7 +20,7 @@ uv run gfunk --version        # smoke test
 - **Auth:** Google OAuth2 Desktop flow, token cached at ~/.config/gfunk/
 - **Cache:** SQLite at ~/.local/share/gfunk/cache.db
 - **Linting:** ruff (strict rule set in .ruff.toml), mypy strict
-- **Tests:** pytest, no parallelism (WSL2 constraint)
+- **Tests:** pytest + pytest-xdist (`-n 6`)
 
 ## Layout
 

@@ -27,10 +27,12 @@ packages = ["src/gfunk"]
 dev = [
     "commitizen>=4.10.0",
     "pytest>=8.0",
+    "pytest-xdist>=3.5",
     "types-tabulate>=0.10.0.20260508",
 ]
 
 [tool.pytest.ini_options]
+addopts = "-n 6"
 testpaths = ["tests"]
 
 [tool.commitizen]

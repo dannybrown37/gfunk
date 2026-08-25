@@ -244,7 +244,8 @@ gfunk/
 |       |-- vibe_search.svg
 |       `-- vibe_table.svg
 |-- scripts/
-|   `-- capture_screenshots.py
+|   |-- capture_screenshots.py
+|   `-- release.py
 |-- src/
 |   `-- gfunk/
 |       |-- __init__.py
@@ -314,6 +315,7 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
+|-- Justfile
 |-- LICENSE
 |-- pyproject.toml
 |-- README.md
