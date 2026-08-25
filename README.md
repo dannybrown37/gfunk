@@ -193,8 +193,6 @@ gfunk/
 |   |-- workflows/
 |   |   `-- ci.yml
 |   `-- dependabot.yml
-|-- .vscode/
-|   `-- mcp.json
 |-- docs/
 |   `-- screenshots/
 |       |-- dubs_groups.svg
@@ -281,6 +279,7 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
+|-- LICENSE
 |-- pyproject.toml
 |-- README.md
 `-- uv.lock
