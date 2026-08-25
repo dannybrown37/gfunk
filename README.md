@@ -280,7 +280,6 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
-|-- BACKLOG.md
 |-- CLAUDE.md
 |-- pyproject.toml
 |-- README.md
