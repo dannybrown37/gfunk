@@ -187,6 +187,7 @@ pre-commit install
 ```
 gfunk/
 |-- .claude/
+|   |-- CLAUDE.md
 |   `-- settings.json
 |-- .github/
 |   |-- workflows/
@@ -280,7 +281,6 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
-|-- CLAUDE.md
 |-- pyproject.toml
 |-- README.md
 `-- uv.lock
