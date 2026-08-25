@@ -45,11 +45,21 @@ def _servers_key(client: str) -> str:
     return "mcpServers" if client == "claude" else "servers"
 
 
+def _build_entry(client: str, tools: str | None = None) -> dict[str, Any]:
+    entry = dict(SERVER_ENTRY)
+    if tools:
+        entry = {**entry, "args": [*entry["args"], "--tools", tools]}
+    if client == "copilot":
+        entry["type"] = "stdio"
+    return entry
+
+
 def install(
     root: Path,
     *,
     client: str = "all",
     global_scope: bool = False,
+    tools: str | None = None,
     home: Path = _HOME,
 ) -> list[Path]:
     """Add gfunk to MCP configs. Returns paths written."""
@@ -60,10 +70,7 @@ def install(
         cfg = _read(path)
         key = _servers_key(c)
         servers = cfg.setdefault(key, {})
-        if c == "copilot":
-            servers["gfunk"] = {**SERVER_ENTRY, "type": "stdio"}
-        else:
-            servers["gfunk"] = dict(SERVER_ENTRY)
+        servers["gfunk"] = _build_entry(c, tools)
         _write(path, cfg)
         written.append(path)
     return written

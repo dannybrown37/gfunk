@@ -102,6 +102,22 @@ class TestUninstall:
             assert "gfunk" not in _mcp_servers(cfg, c)
 
 
+class TestToolsFilter:
+    def test_install_with_tools_adds_flag_to_args(self, tree: Path) -> None:
+        install(tree, client="claude", global_scope=False, tools="snoop,peep")
+        cfg = _read_config(tree, "claude", global_scope=False)
+        entry = _mcp_servers(cfg, "claude")["gfunk"]
+        assert "--tools" in entry["args"]
+        idx = entry["args"].index("--tools")
+        assert entry["args"][idx + 1] == "snoop,peep"
+
+    def test_install_without_tools_has_no_flag(self, tree: Path) -> None:
+        install(tree, client="claude", global_scope=False)
+        cfg = _read_config(tree, "claude", global_scope=False)
+        entry = _mcp_servers(cfg, "claude")["gfunk"]
+        assert "--tools" not in entry["args"]
+
+
 # --- helpers ---
 
 

@@ -395,8 +395,16 @@ def _add_mothership_parser(sub: Any) -> None:
         action="store_true",
         help="Remove gfunk from the client config",
     )
+    install.add_argument(
+        "--tools",
+        help="Comma-separated list of tools to expose (default: all)",
+    )
 
-    ms_sub.add_parser("serve", help="Start the MCP server on stdio")
+    serve = ms_sub.add_parser("serve", help="Start the MCP server on stdio")
+    serve.add_argument(
+        "--tools",
+        help="Comma-separated list of tools to expose (default: all)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1444,15 +1452,21 @@ def cmd_mothership(args: argparse.Namespace) -> int:
         return 0
     if action == "install":
         return _mothership_install(args)
-    return _mothership_serve()
+    tools_csv = getattr(args, "tools", None)
+    tools = set(tools_csv.split(",")) if tools_csv else None
+    return _mothership_serve(tools=tools)
 
 
 def _mothership_install(args: argparse.Namespace) -> int:
     from gfunk.mcp_config import install, uninstall
 
     root = Path.cwd()
-    fn = uninstall if args.uninstall else install
-    paths = fn(root, client=args.client, global_scope=args.global_scope)
+    if args.uninstall:
+        paths = uninstall(root, client=args.client, global_scope=args.global_scope)
+    else:
+        paths = install(
+            root, client=args.client, global_scope=args.global_scope, tools=args.tools
+        )
     verb = "Removed from" if args.uninstall else "Installed to"
     if not paths:
         print("Nothing to do — gfunk is not installed in those configs.")
@@ -1469,7 +1483,7 @@ def _mothership_install(args: argparse.Namespace) -> int:
     return 0
 
 
-def _mothership_serve() -> int:
+def _mothership_serve(*, tools: set[str] | None = None) -> int:
     from gfunk.mothership import run
 
     if sys.stdin.isatty():
@@ -1480,7 +1494,7 @@ def _mothership_serve() -> int:
             file=sys.stderr,
         )
         return 1
-    run()
+    run(tools=tools)
     return 0
 
 

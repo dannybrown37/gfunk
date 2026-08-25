@@ -83,6 +83,21 @@ gfunk names the missing flag and exits rather than hanging a CI job.
 Tools are namespaced `gfunk__snoop`, `gfunk__sample`, `gfunk__regulate`, `gfunk__dubs`, `gfunk__peep`. **stdio only** — an HTTP
 listener holding live Workspace credentials is attack surface this project doesn't need yet.
 
+To expose only specific tools, pass `--tools`:
+
+```json
+{
+  "mcpServers": {
+    "gfunk-drive": {
+      "command": "gfunk",
+      "args": ["mothership", "serve", "--tools", "snoop,sample,peep"]
+    }
+  }
+}
+```
+
+Or via the installer: `gfunk mothership install --tools snoop,sample,peep`
+
 ### The local cache
 
 Bulk reads land in a SQLite database at `~/.local/share/gfunk/cache.db`, created `0600`.
@@ -91,9 +106,24 @@ be chmod-ed. It holds real Workspace content, so it lives outside the repo and i
 committed.
 
 ```bash
+# What's cached?
 sqlite3 ~/.local/share/gfunk/cache.db \
   "SELECT service, kind, count(*) FROM records GROUP BY 1, 2"
+
+# When was it fetched?
+sqlite3 ~/.local/share/gfunk/cache.db \
+  "SELECT service, kind, min(fetched_at), max(fetched_at) FROM records GROUP BY 1, 2"
+
+# Clear everything for a service (force a fresh fetch next run)
+sqlite3 ~/.local/share/gfunk/cache.db "DELETE FROM records WHERE service = 'drive'"
+
+# Nuclear option — delete the whole cache
+rm ~/.local/share/gfunk/cache.db
 ```
+
+There is no automatic expiration — cached data stays until you delete it. Each command
+re-fetches from Google and overwrites its cached records, so running a command again is
+itself a refresh. To force a clean slate, delete the rows or the file.
 
 ## The vocabulary
 
