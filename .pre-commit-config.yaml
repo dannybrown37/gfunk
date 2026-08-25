@@ -4,12 +4,12 @@ default_stages: [pre-commit]
 repos:
   # Fail a bad commit message in ~0.3s rather than after the whole suite.
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.11.1
+    rev: v0.12.0
     hooks:
       - id: commitizen-early
 
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.17.0
+    rev: v4.17.1
     hooks:
       - id: commitizen
         stages: [commit-msg]
@@ -48,7 +48,7 @@ repos:
       - id: zizmor
 
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.11.1
+    rev: v0.12.0
     hooks:
       - id: ruff-check
         args: [--config, .ruff.toml]
