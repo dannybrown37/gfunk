@@ -43,7 +43,7 @@ PREFIX_CSS_CLASSES: list[tuple[str, str]] = [
 
 LEGEND_ITEMS: list[tuple[str, str]] = [
     ("folder", "bright_blue"),
-    ("doc", "dodger_blue"),
+    ("doc", "medium_purple"),
     ("sheet", "green"),
     ("slides", "yellow"),
     ("form", "magenta"),
@@ -55,7 +55,7 @@ LEGEND_ITEMS: list[tuple[str, str]] = [
 
 MIME_CSS = """
     .mime-folder { color: dodgerblue; }
-    .mime-doc { color: cornflowerblue; }
+    .mime-doc { color: mediumpurple; }
     .mime-sheet { color: green; }
     .mime-slides { color: gold; }
     .mime-form { color: magenta; }

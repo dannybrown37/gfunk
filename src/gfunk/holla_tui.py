@@ -525,7 +525,9 @@ class HollaApp(App[None]):
     def _load_preview(self, message_id: str) -> None:
         text = self._workspace.gmail_preview(message_id)[:PREVIEW_CHARS]
         self._preview_cache[message_id] = text
-        self.query_one("#preview-text", Static).update(text)
+        results = self.query("#preview-text")
+        if results:
+            results.first(Static).update(text)
 
     def _clear_preview(self) -> None:
         if self._preview_timer is not None:
