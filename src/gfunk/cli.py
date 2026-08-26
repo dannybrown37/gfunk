@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, UTC
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -1345,9 +1345,31 @@ def pick_spreadsheet(workspace: Any) -> str | None:
         sheets = workspace.spreadsheets()
     if not sheets:
         return None
-    labels = {f"{s['name']}\t{s['id']}": s["id"] for s in sheets}
+    labels = {_sheet_label(s): s["id"] for s in sheets}
     chosen = fzf_pick(list(labels), "Pick a spreadsheet", abort_ok=True)
     return labels[chosen] if chosen else None
+
+
+_DAYS_THRESHOLD = 30
+
+
+def _sheet_label(s: dict[str, str]) -> str:
+    """Format a spreadsheet for the fzf picker: name + relative modified time."""
+    name: str = s["name"]
+    mod = s.get("modifiedTime", "")
+    if mod:
+        dt = datetime.fromisoformat(mod.replace("Z", "+00:00"))
+        ago = datetime.now(UTC) - dt
+        days = ago.days
+        if days == 0:
+            hours = ago.seconds // 3600
+            age = f"{hours}h ago" if hours else "just now"
+        elif days < _DAYS_THRESHOLD:
+            age = f"{days}d ago"
+        else:
+            age = dt.strftime("%Y-%m-%d")
+        return f"{name}  ({age})"
+    return name
 
 
 def pick_range(workspace: Any, spreadsheet_id: str) -> str | None:

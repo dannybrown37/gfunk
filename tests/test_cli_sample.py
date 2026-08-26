@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gfunk.cli import cmd_snoop, pick_spreadsheet, pick_range
+from gfunk.cli import _sheet_label, cmd_snoop, pick_spreadsheet, pick_range
 from gfunk.workspace import SHEET_MIME
 
 
@@ -21,7 +21,7 @@ def sample_args(**overrides: object) -> argparse.Namespace:
     return argparse.Namespace(**{**defaults, **overrides})
 
 
-SHEET = {"id": "s1", "name": "Budget"}
+SHEET = {"id": "s1", "name": "Budget", "modifiedTime": "2026-08-25T10:00:00Z"}
 SHEET_META = {
     "id": "s1",
     "name": "Budget",
@@ -67,7 +67,7 @@ def test_pick_spreadsheet_uses_fzf() -> None:
 
     with (
         patch("gfunk.cli.can_browse", return_value=True),
-        patch("gfunk.cli.fzf_pick", return_value="Budget\ts1") as fzf,
+        patch("gfunk.cli.fzf_pick", return_value=_sheet_label(SHEET)) as fzf,
     ):
         result = pick_spreadsheet(workspace)
 
