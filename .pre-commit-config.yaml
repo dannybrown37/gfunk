@@ -61,3 +61,12 @@ repos:
       - id: embed-tree
       - id: pytest
         args: [tests/, -q]
+
+  - repo: local
+    hooks:
+      - id: screenshots
+        name: screenshots
+        language: system
+        entry: bash -c 'uv run python scripts/capture_screenshots.py && git add docs/screenshots/*.svg'
+        files: '(src/gfunk/(holla_tui|grind_tui|snoop_tui|dubs_tui|regulate_tui|vibe|demo_data)\.py|scripts/capture_screenshots\.py)$'
+        pass_filenames: false
