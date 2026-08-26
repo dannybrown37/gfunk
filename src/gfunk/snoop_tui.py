@@ -57,9 +57,9 @@ class FolderPickScreen(ModalScreen[str | None]):
     """Drive folder picker for Move — drill into folders, pick one."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
-        Binding("escape", "cancel", "esc cancel"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
+        Binding("escape", "cancel", "cancel"),
     ]
 
     def __init__(self, workspace: Workspace, start: str = "root") -> None:
@@ -141,9 +141,9 @@ class ActionMenuScreen(ModalScreen[str | None]):
     """Pick an action for the highlighted file."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
-        Binding("escape", "cancel", "esc cancel"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
+        Binding("escape", "cancel", "cancel"),
     ]
 
     def __init__(self, name: str, actions: list[str]) -> None:
@@ -204,15 +204,15 @@ class SnoopApp(App[None]):
         ("largest", "Largest"),
     ]
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
         Binding("enter", "open_row", "open", show=False),
-        Binding("tab", "toggle_preview_focus", "tab preview"),
-        Binding("escape", "escape", "esc up/quit", show=False),
-        Binding("1", "view_home", "1 home"),
-        Binding("2", "view_recent", "2 recent"),
-        Binding("3", "view_largest", "3 largest"),
-        Binding("q", "quit", "q quit"),
+        Binding("tab", "toggle_preview_focus", "preview"),
+        Binding("escape", "escape", "up/quit", show=False),
+        Binding("1", "view_home", "home"),
+        Binding("2", "view_recent", "recent"),
+        Binding("3", "view_largest", "largest"),
+        Binding("q", "quit", "quit"),
     ]
 
     def __init__(

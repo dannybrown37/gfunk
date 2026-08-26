@@ -162,7 +162,7 @@ class Workspace:
         response = (
             self.drive.files()
             .list(
-                q="trashed = false",
+                q=f"trashed = false and mimeType != '{FOLDER_MIME}'",
                 orderBy="modifiedTime desc",
                 fields=DRIVE_FIELDS,
                 pageSize=min(limit, 100),

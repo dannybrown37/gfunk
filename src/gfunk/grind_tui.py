@@ -142,8 +142,8 @@ class GrindApp(App[None]):
     TITLE = "gfunk grind"
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
         Binding("E", "toggle_detail", "Expand"),
         Binding("O", "open_in_calendar", "open in browser"),
         Binding("q", "quit", "quit"),

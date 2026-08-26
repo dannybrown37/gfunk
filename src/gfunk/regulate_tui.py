@@ -57,7 +57,7 @@ def group_by_folder(
 
 class ActionScreen(ModalScreen[str | None]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "dismiss_none", "esc back", show=False),
+        Binding("escape", "dismiss_none", "back", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -76,9 +76,9 @@ class ActionScreen(ModalScreen[str | None]):
 
 class ConfirmDeleteScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("y", "dismiss_true", "y confirm", show=False),
-        Binding("n", "dismiss_false", "n cancel", show=False),
-        Binding("escape", "dismiss_false", "esc cancel", show=False),
+        Binding("y", "dismiss_true", "confirm", show=False),
+        Binding("n", "dismiss_false", "cancel", show=False),
+        Binding("escape", "dismiss_false", "cancel", show=False),
     ]
 
     def __init__(self, name: str) -> None:
@@ -98,9 +98,9 @@ class ConfirmDeleteScreen(ModalScreen[bool]):
 
 class ConfirmRevokeScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("y", "dismiss_true", "y confirm", show=False),
-        Binding("n", "dismiss_false", "n cancel", show=False),
-        Binding("escape", "dismiss_false", "esc cancel", show=False),
+        Binding("y", "dismiss_true", "confirm", show=False),
+        Binding("n", "dismiss_false", "cancel", show=False),
+        Binding("escape", "dismiss_false", "cancel", show=False),
     ]
 
     def __init__(self, name: str) -> None:
@@ -175,16 +175,16 @@ class RegulateApp(App[tuple[dict[str, Any], str] | None]):
     }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
-        Binding("g", "scroll_top", "gg top", show=False),
-        Binding("G", "scroll_bottom", "G bottom", key_display="G", show=False),
-        Binding("/", "filter", "/ filter"),
-        Binding("O", "open_selected", "O open", key_display="O"),
-        Binding("D", "delete_selected", "D delete", key_display="D"),
-        Binding("R", "revoke_selected", "R revoke", key_display="R"),
-        Binding("escape", "escape", "esc quit", show=False),
-        Binding("q", "quit", "q quit"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
+        Binding("g", "scroll_top", "top", show=False),
+        Binding("G", "scroll_bottom", "bottom", key_display="G", show=False),
+        Binding("/", "filter", "filter"),
+        Binding("O", "open_selected", "open", key_display="O"),
+        Binding("D", "delete_selected", "delete", key_display="D"),
+        Binding("R", "revoke_selected", "revoke", key_display="R"),
+        Binding("escape", "escape", "quit", show=False),
+        Binding("q", "quit", "quit"),
     ]
 
     def __init__(self, rows: list[dict[str, Any]], workspace: Any) -> None:

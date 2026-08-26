@@ -42,7 +42,7 @@ def matches_filter(row: dict[str, Any], query: str) -> bool:
 
 class ActionScreen(ModalScreen[str | None]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "dismiss_none", "esc back", show=False),
+        Binding("escape", "dismiss_none", "back", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -61,9 +61,9 @@ class ActionScreen(ModalScreen[str | None]):
 
 class ConfirmScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("y", "dismiss_true", "y confirm", show=False),
-        Binding("n", "dismiss_false", "n cancel", show=False),
-        Binding("escape", "dismiss_false", "esc cancel", show=False),
+        Binding("y", "dismiss_true", "confirm", show=False),
+        Binding("n", "dismiss_false", "cancel", show=False),
+        Binding("escape", "dismiss_false", "cancel", show=False),
     ]
 
     def __init__(self, message: str) -> None:
@@ -132,16 +132,16 @@ class DubsApp(App[tuple[dict[str, Any], str] | None]):
     }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
-        Binding("g", "scroll_top", "gg top"),
-        Binding("G", "scroll_bottom", "G bottom", key_display="G"),
-        Binding("/", "filter", "/ filter"),
-        Binding("O", "open_selected", "O open", key_display="O"),
-        Binding("K", "keep_selected", "K keep only", key_display="K"),
-        Binding("D", "delete_selected", "D delete", key_display="D"),
-        Binding("escape", "escape", "esc quit", show=False),
-        Binding("q", "quit", "q quit"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
+        Binding("g", "scroll_top", "top"),
+        Binding("G", "scroll_bottom", "bottom", key_display="G"),
+        Binding("/", "filter", "filter"),
+        Binding("O", "open_selected", "open", key_display="O"),
+        Binding("K", "keep_selected", "keep only", key_display="K"),
+        Binding("D", "delete_selected", "delete", key_display="D"),
+        Binding("escape", "escape", "quit", show=False),
+        Binding("q", "quit", "quit"),
     ]
 
     def __init__(self, rows: list[dict[str, Any]], workspace: Workspace | None) -> None:

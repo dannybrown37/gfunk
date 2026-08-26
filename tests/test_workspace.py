@@ -150,7 +150,8 @@ def test_recent_asks_drive_for_the_newest_files_first() -> None:
     assert [f["id"] for f in found] == ["a"], "limit trims the page Drive returned"
     kwargs = drive.files.return_value.list.call_args.kwargs
     assert kwargs["orderBy"] == "modifiedTime desc"
-    assert kwargs["q"] == "trashed = false"
+    assert "trashed = false" in kwargs["q"]
+    assert "mimeType != " in kwargs["q"]
 
 
 def test_sharing_asks_only_for_files_you_own_and_their_permissions() -> None:

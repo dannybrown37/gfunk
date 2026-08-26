@@ -118,9 +118,9 @@ class FolderBrowseScreen(ModalScreen[str | None]):
     """Drive folder picker — snoop-style: drill into folders, pick one to archive."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
-        Binding("escape", "cancel", "esc cancel"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
+        Binding("escape", "cancel", "cancel"),
     ]
 
     def __init__(self, workspace: Workspace, start: str = "root") -> None:
@@ -182,9 +182,9 @@ PREVIEW_CHARS = 2000
 
 class ConfirmTrashScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("y", "dismiss_true", "y confirm", show=False),
-        Binding("n", "dismiss_false", "n cancel", show=False),
-        Binding("escape", "dismiss_false", "esc cancel", show=False),
+        Binding("y", "dismiss_true", "confirm", show=False),
+        Binding("n", "dismiss_false", "cancel", show=False),
+        Binding("escape", "dismiss_false", "cancel", show=False),
     ]
 
     def __init__(self, subject: str) -> None:
@@ -204,9 +204,9 @@ class ConfirmTrashScreen(ModalScreen[bool]):
 
 class ConfirmDeleteLabelScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("y", "dismiss_true", "y confirm", show=False),
-        Binding("n", "dismiss_false", "n cancel", show=False),
-        Binding("escape", "dismiss_false", "esc cancel", show=False),
+        Binding("y", "dismiss_true", "confirm", show=False),
+        Binding("n", "dismiss_false", "cancel", show=False),
+        Binding("escape", "dismiss_false", "cancel", show=False),
     ]
 
     def __init__(self, name: str) -> None:
@@ -226,9 +226,9 @@ class ConfirmDeleteLabelScreen(ModalScreen[bool]):
 
 class ConfirmArchiveLabelScreen(ModalScreen[bool]):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("y", "dismiss_true", "y confirm", show=False),
-        Binding("n", "dismiss_false", "n cancel", show=False),
-        Binding("escape", "dismiss_false", "esc cancel", show=False),
+        Binding("y", "dismiss_true", "confirm", show=False),
+        Binding("n", "dismiss_false", "cancel", show=False),
+        Binding("escape", "dismiss_false", "cancel", show=False),
     ]
 
     def __init__(self, name: str, count: int) -> None:
@@ -293,18 +293,18 @@ class HollaApp(App[None]):
     }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
         Binding("enter", "open_label", "open", show=False),
-        Binding("tab", "toggle_preview_focus", "tab preview"),
-        Binding("/", "filter", "/ filter"),
+        Binding("tab", "toggle_preview_focus", "preview"),
+        Binding("/", "filter", "filter"),
         Binding("a", "archive_message", "archive (label if none)"),
         Binding("A", "archive_to", "archive to… (label if none)"),
         Binding("d", "delete_message", "delete (label if empty)"),
         Binding("o", "open_message", "open"),
-        Binding("s", "toggle_sort", "s date/size"),
-        Binding("escape", "escape", "esc back", show=False),
-        Binding("q", "quit", "q quit"),
+        Binding("s", "toggle_sort", "date/size"),
+        Binding("escape", "escape", "back", show=False),
+        Binding("q", "quit", "quit"),
     ]
 
     def __init__(self, labels: list[dict[str, Any]], workspace: Workspace) -> None:

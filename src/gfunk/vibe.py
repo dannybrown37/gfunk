@@ -25,15 +25,15 @@ class VibeApp(App[None]):
     }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("j", "cursor_down", "j ↓"),
-        Binding("k", "cursor_up", "k ↑"),
-        Binding("h", "cursor_left", "h ←"),
-        Binding("l", "cursor_right", "l →"),
-        Binding("g", "scroll_top", "gg top"),
-        Binding("G", "scroll_bottom", "G bottom", key_display="G"),
-        Binding("/", "search", "/ search"),
-        Binding("escape", "clear_search", "esc clear", show=False),
-        Binding("q", "quit", "q quit"),
+        Binding("j", "cursor_down", "↓"),
+        Binding("k", "cursor_up", "↑"),
+        Binding("h", "cursor_left", "←"),
+        Binding("l", "cursor_right", "→"),
+        Binding("g", "scroll_top", "top"),
+        Binding("G", "scroll_bottom", "bottom", key_display="G"),
+        Binding("/", "search", "search"),
+        Binding("escape", "clear_search", "clear", show=False),
+        Binding("q", "quit", "quit"),
     ]
 
     def __init__(self, rows: list[dict[str, str]], title: str = "gfunk vibe") -> None:
