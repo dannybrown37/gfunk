@@ -198,12 +198,20 @@ class SnoopApp(App[None]):
         border-left: solid $success;
     }
     """
+    VIEW_MODES: ClassVar[list[tuple[str, str]]] = [
+        ("home", "Home"),
+        ("recent", "Recent"),
+        ("largest", "Largest"),
+    ]
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("j", "cursor_down", "j ↓"),
         Binding("k", "cursor_up", "k ↑"),
         Binding("enter", "open_row", "open", show=False),
         Binding("tab", "toggle_preview_focus", "tab preview"),
         Binding("escape", "escape", "esc up/quit", show=False),
+        Binding("1", "view_home", "1 home"),
+        Binding("2", "view_recent", "2 recent"),
+        Binding("3", "view_largest", "3 largest"),
         Binding("q", "quit", "q quit"),
     ]
 
@@ -223,6 +231,7 @@ class SnoopApp(App[None]):
         self._entries: dict[str, dict[str, Any] | None] = {}
         self._preview_timer: Timer | None = None
         self._preview_cache: dict[str, str] = {}
+        self._view_mode: str = "home"
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -240,11 +249,26 @@ class SnoopApp(App[None]):
     def _path(self) -> str:
         return "/".join(name for _, name in self._stack)
 
+    def _mode_label(self) -> str:
+        return dict(self.VIEW_MODES).get(self._view_mode, "Home")
+
     def _load(self) -> None:
         folder_id, _ = self._stack[-1]
-        self.sub_title = self._path()
-        items = self._workspace.children(folder_id, limit=self._limit)
-        self._entries = snoop_entries(items, up=len(self._stack) > 1)
+        if self._view_mode == "recent":
+            items = self._workspace.recent(limit=self._limit)
+            self.sub_title = "Recent files"
+        elif self._view_mode == "largest":
+            items = self._workspace.largest(limit=self._limit)
+            self.sub_title = "Largest files"
+        else:
+            items = self._workspace.children(folder_id, limit=self._limit)
+            self.sub_title = self._path()
+        up = self._view_mode == "home" and len(self._stack) > 1
+        self._entries = snoop_entries(
+            items,
+            up=up,
+            mode=self._view_mode,
+        )
 
         list_view = self.query_one(ListView)
         list_view.clear()
@@ -335,6 +359,20 @@ class SnoopApp(App[None]):
             self.query_one(ListView).focus()
         else:
             preview.focus()
+
+    def _switch_view(self, mode: str) -> None:
+        self._view_mode = mode
+        self._preview_cache.clear()
+        self._load()
+
+    def action_view_home(self) -> None:
+        self._switch_view("home")
+
+    def action_view_recent(self) -> None:
+        self._switch_view("recent")
+
+    def action_view_largest(self) -> None:
+        self._switch_view("largest")
 
     def action_escape(self) -> None:
         if len(self._stack) > 1:

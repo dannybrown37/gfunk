@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 DRIVE_FIELDS = (
     "nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, webViewLink, "
-    "owners(emailAddress))"
+    "owners(emailAddress), quotaBytesUsed)"
 )
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -164,6 +164,25 @@ class Workspace:
             .list(
                 q="trashed = false",
                 orderBy="modifiedTime desc",
+                fields=DRIVE_FIELDS,
+                pageSize=min(limit, 100),
+            )
+            .execute()
+        )
+        found: list[dict[str, Any]] = response.get("files", [])[:limit]
+        self.cache.put_many("drive", "file", [(f["id"], f) for f in found])
+        return found
+
+    def largest(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Owned files sorted by size, largest first — folders excluded."""
+        response = (
+            self.drive.files()
+            .list(
+                q=(
+                    "'me' in owners and trashed = false"
+                    f" and mimeType != '{FOLDER_MIME}'"
+                ),
+                orderBy="quotaBytesUsed desc",
                 fields=DRIVE_FIELDS,
                 pageSize=min(limit, 100),
             )

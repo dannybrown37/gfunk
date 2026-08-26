@@ -976,12 +976,44 @@ def _fmt_date(iso: str) -> str:
     return iso[:10] if iso else ""
 
 
+_BYTES_PER_KIB = 1024
+
+
+def _fmt_size(raw: str | int) -> str:
+    """Human-readable file size from quotaBytesUsed."""
+    b = int(raw) if raw else 0
+    if b == 0:
+        return "  —"
+    size = float(b)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < _BYTES_PER_KIB:
+            return f"{size:,.0f} {unit}" if unit == "B" else f"{size:,.1f} {unit}"
+        size /= _BYTES_PER_KIB
+    return f"{size:,.1f} PB"
+
+
 def snoop_entries(
-    items: list[dict[str, Any]], *, up: bool
+    items: list[dict[str, Any]],
+    *,
+    up: bool,
+    mode: str = "home",
 ) -> dict[str, dict[str, Any] | None]:
     """Label every child the way `ls` would: a trailing slash means you can enter it."""
     entries: dict[str, dict[str, Any] | None] = {UP: None} if up else {}
-    sorted_items = sorted(items, key=lambda i: _natural_key(i.get("name", "")))
+    if mode == "home":
+        sorted_items = sorted(items, key=lambda i: _natural_key(i.get("name", "")))
+    elif mode == "recent":
+        sorted_items = sorted(
+            items, key=lambda i: i.get("modifiedTime", ""), reverse=True
+        )
+    elif mode == "largest":
+        sorted_items = sorted(
+            items,
+            key=lambda i: int(i.get("quotaBytesUsed", 0) or 0),
+            reverse=True,
+        )
+    else:
+        sorted_items = list(items)
     if not sorted_items:
         return entries
     max_name = max(
@@ -990,9 +1022,14 @@ def snoop_entries(
     for item in sorted_items:
         slash = "/" if is_folder(item) else ""
         name = f"{item['name']}{slash}"
-        created = _fmt_date(item.get("createdTime", ""))
-        modified = _fmt_date(item.get("modifiedTime", ""))
-        label = f"{name:<{max_name}}  created {created}  modified {modified}"
+        if mode == "largest":
+            size = _fmt_size(item.get("quotaBytesUsed", 0))
+            modified = _fmt_date(item.get("modifiedTime", ""))
+            label = f"{name:<{max_name}}  {size:>10}  modified {modified}"
+        else:
+            created = _fmt_date(item.get("createdTime", ""))
+            modified = _fmt_date(item.get("modifiedTime", ""))
+            label = f"{name:<{max_name}}  created {created}  modified {modified}"
         entries[label] = item
     return entries
 
