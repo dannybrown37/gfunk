@@ -18,7 +18,69 @@ from textual.widgets import Footer, Header, ListItem, ListView, Static
 
 from gfunk.browser import open_in_browser
 from gfunk.cli import _snoop_actions, snoop_entries, snoop_preview_text
-from gfunk.workspace import DOC_MIME, FOLDER_MIME, SHEET_MIME
+from gfunk.workspace import DOC_MIME, FOLDER_MIME, SCRIPT_MIME, SHEET_MIME
+
+SLIDES_MIME = "application/vnd.google-apps.presentation"
+FORM_MIME = "application/vnd.google-apps.form"
+
+PDF_MIME = "application/pdf"
+
+MIME_CSS_CLASSES: dict[str, str] = {
+    FOLDER_MIME: "mime-folder",
+    DOC_MIME: "mime-doc",
+    SHEET_MIME: "mime-sheet",
+    SLIDES_MIME: "mime-slides",
+    FORM_MIME: "mime-form",
+    SCRIPT_MIME: "mime-script",
+    PDF_MIME: "mime-pdf",
+}
+
+PREFIX_CSS_CLASSES: list[tuple[str, str]] = [
+    ("image/", "mime-image"),
+    ("video/", "mime-video"),
+    ("audio/", "mime-audio"),
+]
+
+LEGEND_ITEMS: list[tuple[str, str]] = [
+    ("folder", "bright_blue"),
+    ("doc", "dodger_blue"),
+    ("sheet", "green"),
+    ("slides", "yellow"),
+    ("form", "magenta"),
+    ("script", "bright_cyan"),
+    ("image", "dark_orange"),
+    ("video", "red"),
+    ("pdf", "indian_red"),
+]
+
+MIME_CSS = """
+    .mime-folder { color: dodgerblue; }
+    .mime-doc { color: cornflowerblue; }
+    .mime-sheet { color: green; }
+    .mime-slides { color: gold; }
+    .mime-form { color: magenta; }
+    .mime-script { color: darkcyan; }
+    .mime-image { color: darkorange; }
+    .mime-video { color: red; }
+    .mime-audio { color: orchid; }
+    .mime-pdf { color: indianred; }
+"""
+
+
+def _css_class_for_mime(mime: str) -> str | None:
+    cls = MIME_CSS_CLASSES.get(mime)
+    if cls:
+        return cls
+    for prefix, css_cls in PREFIX_CSS_CLASSES:
+        if mime.startswith(prefix):
+            return css_cls
+    return None
+
+
+def _build_legend() -> str:
+    parts = [f"[{color}]●[/{color}] {name}" for name, color in LEGEND_ITEMS]
+    return "  ".join(parts)
+
 
 if TYPE_CHECKING:
     from textual.timer import Timer
@@ -45,6 +107,10 @@ class FileRowItem(ListItem):
     def __init__(self, label: str, item: dict[str, Any] | None) -> None:
         super().__init__(Static(label))
         self.item = item
+        if item is not None:
+            css_cls = _css_class_for_mime(item.get("mimeType", ""))
+            if css_cls:
+                self.add_class(css_cls)
 
 
 class FolderItem(ListItem):
@@ -178,7 +244,8 @@ class SnoopApp(App[None]):
 
     ENABLE_COMMAND_PALETTE = False
     TITLE = "gfunk snoop"
-    CSS = """
+    CSS = (
+        """
     #body {
         height: 1fr;
     }
@@ -197,7 +264,15 @@ class SnoopApp(App[None]):
     #preview:focus {
         border-left: solid $success;
     }
+    #legend {
+        dock: bottom;
+        height: 1;
+        padding: 0 1;
+        background: $surface;
+    }
     """
+        + MIME_CSS
+    )
     VIEW_MODES: ClassVar[list[tuple[str, str]]] = [
         ("home", "Home"),
         ("recent", "Recent"),
@@ -239,6 +314,7 @@ class SnoopApp(App[None]):
             yield ListView()
             with VerticalScroll(id="preview", can_focus=True):
                 yield Static(id="preview-text", markup=False)
+        yield Static(_build_legend(), id="legend", markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
