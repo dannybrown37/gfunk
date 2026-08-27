@@ -1,13 +1,13 @@
 # gfunk
 
-Nuthin' but a G-Suite thang. 
+Nuthin' but a G-Suite thang.
 
 A CLI/TUI and MCP server. Google-only by design.
 
 It's not intended to be a full implementation of Google Workspace in the terminal.
 It exists to help organize and audit: capture duplicates, reorganize files on demand,
 archive old emails to PDF, see who can access what files in one view, and provide these
-integrations for other applications on demand. 
+integrations for other applications on demand.
 
 ## Security and privacy
 
