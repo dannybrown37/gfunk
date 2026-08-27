@@ -113,6 +113,12 @@ class FileRowItem(ListItem):
                 self.add_class(css_cls)
 
 
+class SnoopListView(ListView):
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("enter", "select_cursor", "open folder", show=True),
+    ]
+
+
 class FolderItem(ListItem):
     def __init__(self, folder: dict[str, Any]) -> None:
         super().__init__(Static(folder["name"]))
@@ -311,7 +317,7 @@ class SnoopApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal(id="body"):
-            yield ListView()
+            yield SnoopListView()
             with VerticalScroll(id="preview", can_focus=True):
                 yield Static(id="preview-text", markup=False)
         yield Static(_build_legend(), id="legend", markup=True)
@@ -384,8 +390,20 @@ class SnoopApp(App[None]):
         item = event.item
         if isinstance(item, FileRowItem) and item.item is not None:
             self._schedule_preview(item.item)
+            is_folder = item.item.get("mimeType") == FOLDER_MIME
+            self._update_enter_label("open folder" if is_folder else "file actions")
         else:
             self._clear_preview()
+            self._update_enter_label("go up")
+
+    def _update_enter_label(self, label: str) -> None:
+        lv = self.query_one(SnoopListView)
+        bindings = lv._bindings.key_to_bindings.get("enter", [])  # noqa: SLF001
+        for i, binding in enumerate(bindings):
+            if binding.action == "select_cursor":
+                bindings[i] = Binding("enter", "select_cursor", label, show=True)
+                break
+        self.refresh_bindings()
 
     def _schedule_preview(self, item: dict[str, Any]) -> None:
         if self._preview_timer is not None:
