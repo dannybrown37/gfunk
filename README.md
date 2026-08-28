@@ -1,5 +1,12 @@
 # gfunk
 
+[![ci](https://github.com/dannybrown37/gfunk/actions/workflows/ci.yml/badge.svg)](https://github.com/dannybrown37/gfunk/actions/workflows/ci.yml)
+[![coverage](https://dannybrown37.github.io/gfunk/badges/coverage.svg)](https://github.com/dannybrown37/gfunk/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![code style: ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=D7FF64)](https://docs.astral.sh/ruff/)
+[![types: mypy](https://img.shields.io/badge/types-mypy-blue)](http://mypy-lang.org/)
+
 Nuthin' but a G-Suite thang.
 
 A CLI/TUI and MCP server. Google-only by design.
