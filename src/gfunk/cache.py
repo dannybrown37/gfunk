@@ -7,7 +7,8 @@ Workspace content, so it is created 0600 and lives outside the repo.
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -40,8 +41,17 @@ class Cache:
         with self._connect() as conn:
             conn.executescript(SCHEMA)
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path)
+    @contextmanager
+    def _connect(self) -> Generator[sqlite3.Connection]:
+        conn = sqlite3.connect(self.path)
+        try:
+            yield conn
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def put(self, service: str, kind: str, record_id: str, payload: Any) -> None:
         self.put_many(service, kind, [(record_id, payload)])
