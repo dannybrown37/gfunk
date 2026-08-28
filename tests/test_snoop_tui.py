@@ -132,7 +132,9 @@ def test_view_mode_home_restores_path() -> None:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
+            await pilot.pause()
             await pilot.press("1")
+            await pilot.pause()
             await pilot.pause()
             return str(app.sub_title)
 

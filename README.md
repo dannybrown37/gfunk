@@ -299,6 +299,7 @@ gfunk/
 |   |-- test_cli_utils.py
 |   |-- test_cli_vibe.py
 |   |-- test_cli_vibe_command.py
+|   |-- test_demo_data.py
 |   |-- test_dubs.py
 |   |-- test_dubs_tui.py
 |   |-- test_errors.py
@@ -312,6 +313,7 @@ gfunk/
 |   |-- test_regulate.py
 |   |-- test_regulate_tui.py
 |   |-- test_snoop_tui.py
+|   |-- test_vibe_tui.py
 |   |-- test_workspace.py
 |   |-- test_workspace_gmail.py
 |   |-- test_workspace_script_files.py
