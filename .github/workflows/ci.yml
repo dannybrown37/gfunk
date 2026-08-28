@@ -141,4 +141,19 @@ jobs:
         with:
           name: coverage
 
-      - uses: we-cli/coverage-badge-action@8f6b0bd1b727cde6212c8c62d3329c4aac09fec3 # v1.0.1
+      - name: Generate badge
+        run: |
+          COV=$(python3 -c "import json; print(int(json.load(open('coverage.json'))['totals']['percent_covered']))")
+          if [ "$COV" -ge 90 ]; then COLOR="brightgreen";
+          elif [ "$COV" -ge 75 ]; then COLOR="green";
+          elif [ "$COV" -ge 60 ]; then COLOR="yellow";
+          else COLOR="red"; fi
+          mkdir -p badges
+          curl -sS "https://img.shields.io/badge/coverage-${COV}%25-${COLOR}" -o badges/coverage.svg
+
+      - uses: peaceiris/actions-gh-pages@1ef5a1b1df4c63fe21a2242edbee6cac921ece01 # v4.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./badges
+          destination_dir: badges
+          keep_files: true
