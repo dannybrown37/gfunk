@@ -151,6 +151,62 @@ def test_capital_k_keeps_the_row_and_trashes_the_rest_of_the_group() -> None:
     assert row_count == 0
 
 
+def test_enter_opens_action_menu() -> None:
+    from gfunk.dubs_tui import ActionScreen
+
+    async def run() -> bool:
+        app = DubsApp(rows(), workspace=None)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            return any(isinstance(s, ActionScreen) for s in app._screen_stack)
+
+    assert asyncio.run(run()) is True
+
+
+def test_escape_with_no_filter_quits() -> None:
+    async def run() -> bool:
+        app = DubsApp(rows(), workspace=None)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            return app.is_running
+
+    assert asyncio.run(run()) is False
+
+
+def test_gg_scrolls_to_top() -> None:
+    async def run() -> int | None:
+        app = DubsApp(rows(), workspace=None)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("j", "j")
+            await pilot.pause()
+            await pilot.press("g", "g")
+            await pilot.pause()
+            return app.query_one(ListView).index
+
+    idx = asyncio.run(run())
+    assert idx is not None
+    assert idx <= 1
+
+
+def test_shift_g_scrolls_to_bottom() -> None:
+    async def run() -> int | None:
+        app = DubsApp(rows(), workspace=None)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("G")
+            await pilot.pause()
+            return app.query_one(ListView).index
+
+    idx = asyncio.run(run())
+    assert idx is not None
+    assert idx > 0
+
+
 def test_capital_k_cancelled_trashes_nothing() -> None:
     async def run() -> bool:
         ws = MagicMock()

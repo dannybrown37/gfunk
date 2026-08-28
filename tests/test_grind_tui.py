@@ -4,8 +4,9 @@ from typing import Any
 
 import pytest
 
+
+from gfunk.cli import GrindDay, grind_days
 from gfunk.grind_tui import DayHeader, EventItem, _load_label
-from gfunk.cli import grind_days
 
 
 def _event(
@@ -140,3 +141,107 @@ class TestLoadLabel:
     def test_load_thresholds(self, hours: float, expected: str) -> None:
         label = _load_label(hours)
         assert expected in label
+
+
+class TestGrindApp:
+    def test_app_mounts_with_events(self) -> None:
+        import asyncio
+
+        from textual.widgets import ListView
+
+        from gfunk.grind_tui import GrindApp
+
+        async def run() -> int:
+            app = GrindApp(FAKE_EVENTS, num_days=3)
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                return len(app.query_one(ListView).children)
+
+        count = asyncio.run(run())
+        assert count > 0
+
+    def test_toggle_detail_expands_event(self) -> None:
+        import asyncio
+
+        from textual.widgets import ListView
+
+        from gfunk.grind_tui import GrindApp
+
+        async def run() -> bool:
+            app = GrindApp(FAKE_EVENTS, num_days=3)
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                lv = app.query_one(ListView)
+                for i, child in enumerate(lv.children):
+                    if isinstance(child, EventItem):
+                        lv.index = i
+                        break
+                await pilot.press("E")
+                await pilot.pause()
+                assert lv.index is not None
+                item = lv.children[lv.index]
+                return isinstance(item, EventItem) and item.expanded
+
+        assert asyncio.run(run()) is True
+
+    def test_quit_exits(self) -> None:
+        import asyncio
+
+        from gfunk.grind_tui import GrindApp
+
+        async def run() -> bool:
+            app = GrindApp(FAKE_EVENTS, num_days=3)
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                await pilot.press("q")
+                await pilot.pause()
+                return app.is_running
+
+        assert asyncio.run(run()) is False
+
+    def test_day_header_no_events_id(self) -> None:
+        from datetime import date
+
+        day = GrindDay(date=date(2026, 8, 26))
+        header = DayHeader(day)
+        assert header.id == "day-2026-08-26"
+
+    def test_day_header_with_all_day_event_id(self) -> None:
+        days = grind_days(FAKE_EVENTS)
+        day = next(d for d in days if d.all_day)
+        header = DayHeader(day)
+        assert header.id == "day-2026-08-25"
+
+    def test_day_header_with_conflicts_id(self) -> None:
+        from datetime import date
+
+        day = GrindDay(
+            date=date(2026, 8, 25),
+            events=[FAKE_EVENTS[0]],
+            total_hours=1.0,
+            conflicts=2,
+            time_spans=[],
+        )
+        header = DayHeader(day)
+        assert header.id == "day-2026-08-25"
+
+    def test_app_renders_all_day_and_conflicts(self) -> None:
+        import asyncio
+
+        from textual.widgets import ListView
+
+        from gfunk.grind_tui import GrindApp
+
+        overlap_events = [
+            _event("A", "2026-08-24T09:00:00-05:00", "2026-08-24T10:00:00-05:00"),
+            _event("B", "2026-08-24T09:30:00-05:00", "2026-08-24T10:30:00-05:00"),
+            _event("Holiday", "2026-08-24", "2026-08-25", all_day=True),
+        ]
+
+        async def run() -> int:
+            app = GrindApp(overlap_events, num_days=1)
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                return len(app.query_one(ListView).children)
+
+        assert asyncio.run(run()) > 0

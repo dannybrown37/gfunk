@@ -278,12 +278,14 @@ gfunk/
 |   |-- test_cache.py
 |   |-- test_cli.py
 |   |-- test_cli_bounce.py
+|   |-- test_cli_bounce_json.py
 |   |-- test_cli_dj.py
 |   |-- test_cli_dj_list.py
 |   |-- test_cli_drop.py
 |   |-- test_cli_dubs.py
 |   |-- test_cli_grind.py
 |   |-- test_cli_holla.py
+|   |-- test_cli_mothership.py
 |   |-- test_cli_mount_up.py
 |   |-- test_cli_peep.py
 |   |-- test_cli_peep_open.py
@@ -292,7 +294,9 @@ gfunk/
 |   |-- test_cli_snoop_delete.py
 |   |-- test_cli_snoop_move.py
 |   |-- test_cli_snoop_peek.py
+|   |-- test_cli_snoop_sheet.py
 |   |-- test_cli_snoop_walk.py
+|   |-- test_cli_utils.py
 |   |-- test_cli_vibe.py
 |   |-- test_cli_vibe_command.py
 |   |-- test_dubs.py
