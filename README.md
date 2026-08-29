@@ -59,27 +59,10 @@ options:
 
 <!-- help:end -->
 
-## Security and privacy
-
-**gfunk ships zero credentials.** You register your own Google Cloud project, create your own
-OAuth client, and supply your own `credentials.json`. Nothing in this repo grants access to
-anything.
-
-- Config lives at `~/.config/gfunk/` — never in the repo. The cached token is written `0600`.
-- Scopes start at **read-only** (`spreadsheets.readonly`, `drive.readonly`) and widen only
-  deliberately; a test asserts the exact list, so a widening cannot land unnoticed.
-- `credentials.json`, `token.json` and `.env` are gitignored, and `gitleaks` +
-  `detect-private-key` run on every commit as the backstop.
-- **Test fixtures are the real leak risk here**, not secrets — a real customer name, address
-  or spreadsheet ID in a fixture is a PII commit that no secret scanner will catch. Fixtures
-  must be synthetic. The `block-private-terms` hook is the machine-side half of that rule.
-
-Found a security issue? Open a GitHub security advisory rather than a public issue.
-
 ## Install
 
 ```bash
-uv too install gfunk
+uv tool install gfunk
 ```
 
 ## Usage
@@ -123,6 +106,23 @@ Every command prints JSON on stdout and the replayable invocation on stderr, so
 
 Run any of them with arguments missing and you'll be prompted — except off a TTY, where
 gfunk names the missing flag and exits rather than hanging a CI job.
+
+## Security and privacy
+
+**gfunk ships zero credentials.** You register your own Google Cloud project, create your own
+OAuth client, and supply your own `credentials.json`. Nothing in this repo grants access to
+anything.
+
+- Config lives at `~/.config/gfunk/` — never in the repo. The cached token is written `0600`.
+- Scopes start at **read-only** (`spreadsheets.readonly`, `drive.readonly`) and widen only
+  deliberately; a test asserts the exact list, so a widening cannot land unnoticed.
+- `credentials.json`, `token.json` and `.env` are gitignored, and `gitleaks` +
+  `detect-private-key` run on every commit as the backstop.
+- **Test fixtures are the real leak risk here**, not secrets — a real customer name, address
+  or spreadsheet ID in a fixture is a PII commit that no secret scanner will catch. Fixtures
+  must be synthetic. The `block-private-terms` hook is the machine-side half of that rule.
+
+Found a security issue? Open a GitHub security advisory rather than a public issue.
 
 ### As an MCP server
 
@@ -182,7 +182,7 @@ itself a refresh. To force a clean slate, delete the rows or the file.
 ## The vocabulary
 
 | Command | Alias | What it does |
-|---|---|---|
+| --- | --- | --- |
 | `mount-up` | `setup`, `login` | Guided first-run: create OAuth client, sign in |
 | `snoop` | `browse` | Walk folders, read files, view sheets — your Drive window (TUI with a live preview pane) |
 | `vibe` | `sheet` | Open a spreadsheet in the interactive viewer (TUI) — bare call fzf-picks from recent spreadsheets |
