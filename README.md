@@ -328,6 +328,7 @@ gfunk/
 |-- .gitignore
 |-- .pre-commit-config.yaml
 |-- .ruff.toml
+|-- CHANGELOG.md
 |-- Justfile
 |-- LICENSE
 |-- pyproject.toml

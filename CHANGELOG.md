@@ -1,0 +1,75 @@
+## v0.1.0 (2026-08-28)
+
+### Feat
+
+- snoop should color code by file type now
+- add recency and size sorting options to 'snoop' command
+- add gmail integration and a 'grind' command that shows agenda for next X days
+- expose gfunk vibe
+- default snoop command to opening a TUI with doc viewer
+- pdf attachments in holla archive works!
+- add a modal during archive processing (which can take a while for labels)
+- allow deletion of empty labels (warn for non-empty and reject)
+- holla command gets preview pane with scroll plus delete shortcut
+- continue expanding gfunk holla features
+- set up holla / emails command
+- gfunk dubs finds duplicates or suspected duplicates, TUI view
+- gfunk snoop now offers multi-selection with tab
+- gfunk regulate has a revoke option now
+- regulate prints a nice tui view
+- snoop gets limited live preview and a delete option (trash)
+- add dj push/pull
+- set up apps scripts api access, dj runs now prints recent runs
+- reorganize and give flavor names for each topic in the help menu
+- gfunk drop uploads a file
+- gfunk vibe gets a simple TUI viewer and replaces sample
+- add a (fairly weak) dj subcommand that opens google scripts pages
+- gfunk slide for moving items around drive with fzf and browsing
+- gfunk peep to view docs or sheets in the terminal, fzf selection
+- add gfunk dig/open, gfunk bounce/export
+- initial prototype ready
+
+### Fix
+
+- badge/readme update
+- handle some test warnings
+- trailing whitespace in readme
+- show enter instructions on snoop command
+- pre-commit + CI guard for regenerating screenshots when TUIs change
+- improve 'gfunk vibe' menu
+- blue->purple for clarity
+- TUI menu was duplicative, now it's not
+- pytext-xdist to cut test suite time in half, justfile with release script
+- publish.yml for PyPI
+- mothership/mcp should be tool-specific, details on cache in README
+- add license, gitignore terms
+- remove backlog
+- add lookback on grind command
+- improve grind tui
+- TUI descriptions in help
+- bug on vibe TUI, specifically label vibe TUI
+- visual bug when deleting holla items down from >1 to 1
+- when backing up attachments, create a directory and group renders + attachments in it
+- lint
+- cli options tweak; fix ruff toml issue driving me crazy in nvim
+- header with flavor
+- pre-commit passage
+- y/n casing
+- make revoke/delete easier in gfunk regulate
+- Greatly improve layout of TUI on regulate command
+- dj triggers label clarity
+- add scripts.projects scope
+- hanging tests, more flavor names
+- merge everything into snoop, too many similar commands
+- merged dig into peep, added a print action for snoop, update rules
+- merge snoop and slide commands into one
+- improve cli help
+- remove get-down, it was confusing overlap, just a single setup/login/mount-up command
+- downgrade to 3.13 for ruff lsp reasons
+- slight update to alias and description for gfunk sample
+- gfunk dig doesn't ask for ID if Ctrl+C out of fzf
+- mothership has install and serve sub commands now
+- narrow dig to just opening a file in your browser
+- alias sample, remove mix, alias mothership
+- pass linting
+- make mount-up do better bootstrapping
