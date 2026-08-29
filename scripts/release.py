@@ -69,10 +69,7 @@ def main() -> None:
     if not confirm("Proceed with this bump?"):
         abort()
 
-    print("\n── Running tests ──")
-    run(["uv", "run", "pytest", "tests/", "-q"])
-
-    print("\n── Running pre-commit ──")
+    print("\n── Running pre-commit (includes tests) ──")
     run(["uv", "run", "pre-commit", "run", "--all-files"], check=False)
 
     if not confirm("Pre-commit done. Continue?"):
