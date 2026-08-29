@@ -104,8 +104,9 @@ def _grouped_help(parser: argparse.ArgumentParser) -> str:
         cols = 80
     indent = 30
     wrap_width = max(20, cols - indent)
-    bold = "\033[1m"
-    reset = "\033[0m"
+    use_color = os.environ.get("NO_COLOR") is None and sys.stdout.isatty()
+    bold = "\033[1m" if use_color else ""
+    reset = "\033[0m" if use_color else ""
 
     lines = [
         f"usage: {parser.prog} [-h] [--version] <command> ...\n",

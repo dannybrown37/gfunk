@@ -8,14 +8,56 @@
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=D7FF64)](https://docs.astral.sh/ruff/)
 [![types: mypy](https://img.shields.io/badge/types-mypy-blue)](http://mypy-lang.org/)
 
-Nuthin' but a G-Suite thang.
-
-A CLI/TUI and MCP server. Google-only by design.
+A CLI/TUI and MCP server with a G-Funk vibe. Google-only by design.
 
 It's not intended to be a full implementation of Google Workspace in the terminal.
 It exists to provide immediate access to information, and to help organize and audit:
 capture duplicates, reorganize files on demand, archive old emails to PDF, see who
 can access what files in one view, and provide these integrations for other applications.
+
+## What it does
+
+<!-- help:start -->
+
+```text
+usage: gfunk [-h] [--version] <command> ...
+
+Nuthin' but a G-Suite thang
+
+the plug (auth):
+  mount-up (setup, login)     Create/install your own OAuth client if needed +
+                              sign in
+
+the stash (files):
+  snoop (browse)              Walk your Google Drive folders, act on docs and
+                              sheets
+  vibe (sheet)                Open a spreadsheet in the interactive viewer (TUI)
+  drop (upload)               Upload local files to Drive
+  bounce (export)             Export a Google Workspace file (Sheets→CSV/JSON,
+                              Docs→txt/html)
+
+the game (management):
+  regulate (audit)            Audit and revoke who can reach your Drive files
+                              (TUI)
+  dubs (duplicates)           Manage duplicate files on your Google Drive (TUI)
+  holla (emails)              Email storage management and Drive backup (TUI)
+
+the hustle (calendar):
+  grind (agenda)              Next week's Calendar events (needs `mount-up
+                              --with-calendar`)
+
+the studio (apps):
+  dj (scripts)                Open your Apps Script dashboard/info; push/pull
+                              scripts
+  mothership (mcp)            MCP server: install into clients or serve over
+                              stdio
+
+options:
+  --help                      show this help message and exit
+  --version                   show program's version number and exit
+```
+
+<!-- help:end -->
 
 ## Security and privacy
 
@@ -37,7 +79,7 @@ Found a security issue? Open a GitHub security advisory rather than a public iss
 ## Install
 
 ```bash
-uv sync
+uv too install gfunk
 ```
 
 ## Usage

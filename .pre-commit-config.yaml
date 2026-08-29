@@ -4,7 +4,7 @@ default_stages: [pre-commit]
 repos:
   # Fail a bad commit message in ~0.3s rather than after the whole suite.
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.12.0
+    rev: v0.12.1
     hooks:
       - id: commitizen-early
         fail_fast: true
@@ -49,7 +49,7 @@ repos:
       - id: zizmor
 
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.12.0
+    rev: v0.12.1
     hooks:
       - id: ruff-check
         args: [--config, .ruff.toml]
@@ -59,6 +59,9 @@ repos:
       # A secret scanner cannot find a real customer name or sheet ID. This
       # can. Public repo + Workspace data makes it the load-bearing one.
       - id: block-private-terms
+      - id: embed-command
+        args: ['--marker=help', '--command=uv run gfunk --help', '--lang=text']
+        files: ^(src/gfunk/cli\.py|README\.md)$
       - id: embed-tree
       - id: pytest
         args: [tests/, -q]
