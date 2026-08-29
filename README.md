@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/dannybrown37/gfunk/actions/workflows/ci.yml/badge.svg)](https://github.com/dannybrown37/gfunk/actions/workflows/ci.yml)
 [![coverage](https://dannybrown37.github.io/gfunk/badges/coverage.svg)](https://github.com/dannybrown37/gfunk/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/gfunk?logo=pypi&logoColor=white)](https://pypi.org/project/gfunk/)
 [![python](https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=D7FF64)](https://docs.astral.sh/ruff/)
