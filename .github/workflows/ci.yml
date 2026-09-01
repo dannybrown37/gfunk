@@ -121,12 +121,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+      - uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           languages: python
           queries: security-extended
 
-      - uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+      - uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
 
   coverage-badge:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -151,7 +151,7 @@ jobs:
           mkdir -p badges
           curl -sS "https://img.shields.io/badge/coverage-${COV}%25-${COLOR}" -o badges/coverage.svg
 
-      - uses: peaceiris/actions-gh-pages@1ef5a1b1df4c63fe21a2242edbee6cac921ece01 # v4.1.0
+      - uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./badges
