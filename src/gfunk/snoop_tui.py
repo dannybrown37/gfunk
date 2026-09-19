@@ -8,9 +8,11 @@ menu (view/open/print/move/delete); folders drill down in place.
 from __future__ import annotations
 
 import sys
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import App, ComposeResult
+from textual.css.query import NoMatches
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import ModalScreen
@@ -424,7 +426,8 @@ class SnoopApp(App[None]):
         file_id = str(item["id"])
         text = snoop_preview_text(self._workspace, item)
         self._preview_cache[file_id] = text
-        self.query_one("#preview-text", Static).update(text)
+        with suppress(NoMatches):
+            self.query_one("#preview-text", Static).update(text)
 
     def _clear_preview(self) -> None:
         if self._preview_timer is not None:
