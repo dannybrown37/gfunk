@@ -326,6 +326,7 @@ gfunk/
 |   |-- test_bootstrap.py
 |   |-- test_browser.py
 |   |-- test_cache.py
+|   |-- test_capture_screenshots.py
 |   |-- test_cli.py
 |   |-- test_cli_bounce.py
 |   |-- test_cli_bounce_json.py
@@ -362,6 +363,7 @@ gfunk/
 |   |-- test_mothership_config.py
 |   |-- test_regulate.py
 |   |-- test_regulate_tui.py
+|   |-- test_release.py
 |   |-- test_snoop_tui.py
 |   |-- test_vibe_tui.py
 |   |-- test_workspace.py

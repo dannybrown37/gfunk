@@ -14,7 +14,10 @@ def run(cmd: list[str], *, check: bool = True, capture: bool = False) -> str:
 
 
 def confirm(prompt: str) -> bool:
-    answer = input(f"\n{prompt} [y/N] ").strip().lower()
+    try:
+        answer = input(f"\n{prompt} [y/N] ").strip().lower()
+    except EOFError:
+        return False
     return answer in ("y", "yes")
 
 
