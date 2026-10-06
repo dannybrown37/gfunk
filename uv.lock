@@ -283,7 +283,7 @@ wheels = [
 
 [[package]]
 name = "commitizen"
-version = "4.18.1"
+version = "4.19.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argcomplete" },
@@ -299,9 +299,9 @@ dependencies = [
     { name = "termcolor" },
     { name = "tomlkit" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0a/05/5740bfcd2e89e8be97757294335b5c480bcf60b134ef7bc84428c3a15884/commitizen-4.18.1.tar.gz", hash = "sha256:27379caedd00553344e44cc8cef039598b6d3e65f9b598e31d355489c481563d", size = 68482, upload-time = "2026-09-13T21:37:43.008Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/b7/3bd204cbebc109c56a4ac2ada7ae15e15e9b3328b70891e941e70cbfc173/commitizen-4.19.0.tar.gz", hash = "sha256:9ed44eea06b5886462c30292a30c389330215e8fa79bcf932dbc4126b11009ef", size = 68834, upload-time = "2026-09-22T10:32:27.815Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/3e/c15f31a04a3432bce3312cde554ba73e8c5232a3615f08f39264a447c427/commitizen-4.18.1-py3-none-any.whl", hash = "sha256:16ed052ff775bf42cad85bc09075db110ca7ba84f49233fc642629a0da65862b", size = 90476, upload-time = "2026-09-13T21:37:41.152Z" },
+    { url = "https://files.pythonhosted.org/packages/18/d2/bbe7a1b6f1bd18edada266d604ae3baeeb9d5d432538202cd4ce949ff5cf/commitizen-4.19.0-py3-none-any.whl", hash = "sha256:ab17bc6578b6f12bb8ea827197bf899fdf0dd3c5874180023656c40e22f838c1", size = 90867, upload-time = "2026-09-22T10:32:26.476Z" },
 ]
 
 [[package]]
@@ -1876,7 +1876,7 @@ wheels = [
 
 [[package]]
 name = "xhtml2pdf"
-version = "0.2.20"
+version = "0.2.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arabic-reshaper" },
@@ -1889,7 +1889,7 @@ dependencies = [
     { name = "reportlab" },
     { name = "svglib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d7/c2/cdc2edc9c1c3f040bec674705cc02b6bdd433e30f0f705df7c3e5eb69e03/xhtml2pdf-0.2.20.tar.gz", hash = "sha256:c00f3274ac2201c67e5f59b8cc9ea7517f0a125f63fc8da2bdc72403019bb029", size = 322570, upload-time = "2026-09-16T01:15:35.609Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/86/05f32dd25ccdef51960268305ef4459cceef8a5188888bf85b84be8c8aa6/xhtml2pdf-0.2.21.tar.gz", hash = "sha256:c9b61611b9334040e27762fcdd3e8b98febf4b10cd916e108dfaf763d820907d", size = 355002, upload-time = "2026-09-26T20:24:38.223Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/81/5805e1a35010134432e660b67ed31ce9a256df7a5ae9f96dadba8498e9b7/xhtml2pdf-0.2.20-py3-none-any.whl", hash = "sha256:b030ddccbe5bbd4dd3d03f2a2fb72c89ebbaddfd3ecfd3d1a0fc919757d10c85", size = 223152, upload-time = "2026-09-16T01:15:33.641Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/00/5fdcc632d71b865e8f9f3da98894c6824a7d1b11b27c970dbe247d84dfff/xhtml2pdf-0.2.21-py3-none-any.whl", hash = "sha256:b63c72b23afe5e09811e4f1873332c4736ef1a849498c403fe8cf89fdb3fff42", size = 239916, upload-time = "2026-09-26T20:24:36.542Z" },
 ]
