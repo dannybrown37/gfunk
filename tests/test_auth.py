@@ -1,4 +1,6 @@
 import json
+import os
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -179,3 +181,34 @@ def test_token_state_treats_an_unreadable_token_as_stale(tmp_path: Path) -> None
     token = tmp_path / "token.json"
     token.write_text("not json")
     assert auth.token_state(token) == "stale"
+
+
+def test_token_is_never_on_disk_with_loose_permissions(
+    client_secrets: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token_path = tmp_path / "fresh" / "token.json"
+    flow = MagicMock()
+    flow.run_local_server.return_value = fake_creds()
+    modes_at_write: list[int | None] = []
+    real_write_text = Path.write_text
+
+    def spy(self: Path, *args: object, **kwargs: object) -> int:
+        if self == token_path:
+            modes_at_write.append(
+                stat.S_IMODE(self.stat().st_mode) if self.exists() else None
+            )
+        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", spy)
+    previous = os.umask(0o022)
+    try:
+        with patch(
+            "gfunk.auth.InstalledAppFlow.from_client_secrets_file", return_value=flow
+        ):
+            get_down(client_secrets=client_secrets, token_path=token_path)
+    finally:
+        os.umask(previous)
+
+    assert modes_at_write == [0o600]
+    assert stat.S_IMODE(token_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(token_path.parent.stat().st_mode) == 0o700

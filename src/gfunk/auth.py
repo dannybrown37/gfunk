@@ -113,7 +113,10 @@ def get_down(
             success_message="gfunk is signed in. Close this tab.",
         )
 
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    token_path.write_text(creds.to_json())
+    token_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # 0600 before the refresh token lands, not after: write_text would create
+    # the file 0644 and leave it readable for the width of the write.
+    token_path.touch(mode=0o600, exist_ok=True)
     token_path.chmod(0o600)
+    token_path.write_text(creds.to_json())
     return creds
